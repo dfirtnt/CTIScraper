@@ -313,23 +313,27 @@ async def article_detail(request: Request, article_id: int):
         
         source = await async_db_manager.get_source(article.source_id)
         
-        # Implement actual TTP analysis for individual article
+                # Implement enhanced TTP analysis with LLM quality assessment
         from src.utils.ttp_extractor import ThreatHuntingDetector
+        from src.utils.llm_quality_assessor import LLMQualityAssessor
         
         if article.content and len(article.content) > 100:
             try:
                 hunting_detector = ThreatHuntingDetector()
+                llm_assessor = LLMQualityAssessor()
                 
                 # Safely concatenate title and content
                 title = str(article.title) if article.title else ""
                 content = str(article.content) if article.content else ""
                 full_text = f"{title} {content}".strip()
                 
+                # TTP analysis
                 analysis = hunting_detector.detect_hunting_techniques(
                     full_text,
                     article.id
                 )
                 
+                # Enhanced TTP analysis data
                 ttp_analysis = {
                     "total_techniques": analysis.total_techniques,
                     "overall_confidence": analysis.overall_confidence,
@@ -342,32 +346,41 @@ async def article_detail(request: Request, article_id: int):
                                 "hunting_guidance": tech.hunting_guidance
                             } for tech in techniques
                         ] for category, techniques in analysis.techniques_by_category.items()
-                    }
+                    },
+                    "threat_actors": analysis.threat_actors,
+                    "malware_families": analysis.malware_families,
+                    "attack_vectors": analysis.attack_vectors
                 }
                 
-                # Calculate quality analysis
-                quality_analysis = hunting_detector.calculate_ttp_quality_score(content)
-                # Ensure we only sum numeric values
-                numeric_values = [v for v in quality_analysis.values() if isinstance(v, (int, float))]
-                total_score = sum(numeric_values) if numeric_values else 0
+                # TTP quality score
+                ttp_quality_analysis = hunting_detector.calculate_ttp_quality_score(content)
+                numeric_values = [v for v in ttp_quality_analysis.values() if isinstance(v, (int, float))]
+                ttp_score = sum(numeric_values) if numeric_values else 0
                 
-                if total_score >= 60:
-                    quality_level = "Excellent"
-                elif total_score >= 40:
-                    quality_level = "Good"
-                elif total_score >= 20:
-                    quality_level = "Fair"
-                else:
-                    quality_level = "Limited"
+                # NEW: LLM quality assessment
+                llm_assessment = llm_assessor.assess_content_quality(content, {
+                    'total_techniques': analysis.total_techniques,
+                    'techniques_by_category': analysis.techniques_by_category
+                })
                 
+                # Enhanced quality data combining TTP and LLM assessment
                 quality_data = {
-                    "total_score": total_score,
+                    "ttp_score": ttp_score,
+                    "llm_score": llm_assessment.total_quality_score,
+                    "combined_score": (ttp_score + llm_assessment.total_quality_score) / 2,
+                    "quality_level": llm_assessment.quality_level,
+                    "tactical_score": llm_assessment.tactical_score,
+                    "strategic_score": llm_assessment.strategic_score,
+                    "classification": llm_assessment.classification,
+                    "hunting_priority": llm_assessment.hunting_priority,
+                    "recommendations": llm_assessment.recommendations,
+                    "structure_score": llm_assessment.content_structure_score,
+                    "technical_score": llm_assessment.technical_depth_score,
+                    "intelligence_score": llm_assessment.intelligence_value_score,
                     "max_possible": 75,
-                    "quality_level": quality_level,
-                    "sigma_rules_present": quality_analysis.get('sigma_rules_present', 0),
-                    "mitre_attack_mapping": quality_analysis.get('mitre_attack_mapping', 0),
-                    "iocs_present": quality_analysis.get('iocs_present', 0),
-                    "recommendation": f"Quality score: {total_score}/75 - {quality_level} analysis potential"
+                    "sigma_rules_present": ttp_quality_analysis.get('sigma_rules_present', 0),
+                    "mitre_attack_mapping": ttp_quality_analysis.get('mitre_attack_mapping', 0),
+                    "iocs_present": ttp_quality_analysis.get('iocs_present', 0)
                 }
                 
             except Exception as e:
@@ -425,90 +438,107 @@ async def article_detail(request: Request, article_id: int):
 # TTP Analysis page
 @app.get("/analysis", response_class=HTMLResponse)
 async def ttp_analysis(request: Request):
-    """TTP Analysis page."""
+    """TTP Analysis page with enhanced LLM quality assessment."""
     try:
         stats = await async_db_manager.get_database_stats()
         articles = await async_db_manager.list_articles(limit=20)
         
-        # Implement actual TTP analysis aggregation
+        # Import both TTP detector and LLM quality assessor
         from src.utils.ttp_extractor import ThreatHuntingDetector
-        hunting_detector = ThreatHuntingDetector()
+        from src.utils.llm_quality_assessor import LLMQualityAssessor
         
-        # Analyze articles for TTP content
+        hunting_detector = ThreatHuntingDetector()
+        llm_assessor = LLMQualityAssessor()
+        
+        # Analyze articles for TTP content and quality
         total_techniques_detected = 0
         high_priority_articles = 0
-        quality_scores = []
+        ttp_quality_scores = []
+        llm_quality_scores = []
         technique_categories = defaultdict(int)
         recent_analyses = []
+        
+        # Quality distribution tracking
+        quality_distribution = {"Excellent": 0, "Good": 0, "Fair": 0, "Limited": 0}
+        tactical_distribution = {"Tactical": 0, "Strategic": 0, "Hybrid": 0}
         
         for article in articles:
             if article.content and len(article.content) > 100:
                 try:
-                    # Run TTP analysis
                     # Safely concatenate title and content
                     title = str(article.title) if article.title else ""
                     content = str(article.content) if article.content else ""
                     full_text = f"{title} {content}".strip()
                     
-                    analysis = hunting_detector.detect_hunting_techniques(
+                    # Run TTP analysis (existing functionality)
+                    ttp_analysis = hunting_detector.detect_hunting_techniques(
                         full_text,
                         article.id
                     )
                     
-                    total_techniques_detected += analysis.total_techniques
+                    total_techniques_detected += ttp_analysis.total_techniques
                     
-                    if analysis.hunting_priority in ["High", "Medium"]:
+                    if ttp_analysis.hunting_priority in ["High", "Medium"]:
                         high_priority_articles += 1
                     
                     # Count technique categories
-                    for category, techniques in analysis.techniques_by_category.items():
+                    for category, techniques in ttp_analysis.techniques_by_category.items():
                         technique_categories[category] += len(techniques)
                     
-                    # Calculate quality score
-                    quality_analysis = hunting_detector.calculate_ttp_quality_score(content)
-                    # Ensure we only sum numeric values
-                    numeric_values = [v for v in quality_analysis.values() if isinstance(v, (int, float))]
-                    total_score = sum(numeric_values) if numeric_values else 0
-                    quality_scores.append(total_score)
+                    # Calculate TTP quality score (existing functionality)
+                    ttp_quality_analysis = hunting_detector.calculate_ttp_quality_score(content)
+                    numeric_values = [v for v in ttp_quality_analysis.values() if isinstance(v, (int, float))]
+                    ttp_score = sum(numeric_values) if numeric_values else 0
+                    ttp_quality_scores.append(ttp_score)
                     
-                    # Add to recent analyses (top 5)
+                    # NEW: Run LLM quality assessment
+                    llm_assessment = llm_assessor.assess_content_quality(content, {
+                        'total_techniques': ttp_analysis.total_techniques,
+                        'techniques_by_category': ttp_analysis.techniques_by_category
+                    })
+                    
+                    llm_quality_scores.append(llm_assessment.total_quality_score)
+                    
+                    # Track quality distributions
+                    quality_distribution[llm_assessment.quality_level] += 1
+                    tactical_distribution[llm_assessment.classification] += 1
+                    
+                    # Add to recent analyses (top 5) with enhanced data
                     if len(recent_analyses) < 5:
                         recent_analyses.append({
                             "article": article,
-                            "analysis": analysis,
-                            "quality_score": total_score
+                            "ttp_analysis": ttp_analysis,
+                            "ttp_quality_score": ttp_score,
+                            "llm_assessment": llm_assessment,
+                            "combined_score": (ttp_score + llm_assessment.total_quality_score) / 2
                         })
                     
                 except Exception as e:
-                    logger.warning(f"TTP analysis failed for article {article.id}: {e}")
+                    logger.warning(f"Analysis failed for article {article.id}: {e}")
                     continue
         
         # Calculate summary statistics
-        avg_quality = sum(quality_scores) / len(quality_scores) if quality_scores else 0.0
+        avg_ttp_quality = sum(ttp_quality_scores) / len(ttp_quality_scores) if ttp_quality_scores else 0.0
+        avg_llm_quality = sum(llm_quality_scores) / len(llm_quality_scores) if llm_quality_scores else 0.0
         
-        # Quality distribution (based on 75-point scale)
-        distribution = {"Excellent": 0, "Good": 0, "Fair": 0, "Limited": 0}
-        for score in quality_scores:
-            if score >= 60:
-                distribution["Excellent"] += 1
-            elif score >= 40:
-                distribution["Good"] += 1
-            elif score >= 20:
-                distribution["Fair"] += 1
-            else:
-                distribution["Limited"] += 1
-        
+        # Enhanced analysis summary
         analysis_summary = {
             "total_techniques_detected": total_techniques_detected,
             "high_priority_articles": high_priority_articles,
             "mitre_coverage": len([cat for cat in technique_categories if "MITRE" in cat.upper()]),
-            "recent_analysis": recent_analyses
+            "recent_analysis": recent_analyses,
+            "quality_distribution": quality_distribution,
+            "tactical_distribution": tactical_distribution
         }
         
+        # Enhanced quality stats
         quality_stats = {
-            "average_score": avg_quality,
-            "total_analyzed": len(quality_scores),
-            "distribution": distribution
+            "ttp_average_score": avg_ttp_quality,
+            "llm_average_score": avg_llm_quality,
+            "combined_average_score": (avg_ttp_quality + avg_llm_quality) / 2,
+            "total_analyzed": len(llm_quality_scores),
+            "quality_distribution": quality_distribution,
+            "tactical_distribution": tactical_distribution
         }
         
         return templates.TemplateResponse(
@@ -519,7 +549,7 @@ async def ttp_analysis(request: Request):
                 "articles": articles,
                 "analysis_summary": analysis_summary,
                 "quality_stats": quality_stats,
-                "analyses": recent_analyses  # Add this for the template
+                "analyses": recent_analyses
             }
         )
     except Exception as e:
