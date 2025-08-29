@@ -1,13 +1,13 @@
 # Core FastAPI and web framework
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-jinja2==3.1.2
-python-multipart==0.0.6
+fastapi==0.115.6
+uvicorn[standard]==0.32.0
+jinja2==3.1.3
+python-multipart==0.0.9
 
 # Database - PostgreSQL
 asyncpg==0.29.0
-sqlalchemy[asyncio]==2.0.23
-alembic==1.12.1
+sqlalchemy[asyncio]==2.0.25
+alembic==1.13.1
 psycopg2-binary==2.9.9
 
 # Background tasks and caching
@@ -16,10 +16,10 @@ redis==5.0.1
 flower==2.0.1
 
 # HTTP client and scraping
-httpx==0.25.2
-beautifulsoup4==4.12.2
-lxml>=4.9.0,<5.0.0
-feedparser==6.0.10
+httpx==0.26.0
+beautifulsoup4==4.12.3
+lxml>=4.9.3,<5.0.0
+feedparser==6.0.11
 extruct>=0.16.0
 readability-lxml>=0.3.0
 
