@@ -144,17 +144,33 @@
         
         <div class="mb-6">
             <div class="flex items-center justify-between mb-2">
-                <span class="text-sm font-medium text-gray-700">Overall Quality Score</span>
-                <span class="text-lg font-bold text-gray-900">{{ quality_data.total_score }}/{{ quality_data.max_possible }}</span>
+                <span class="text-sm font-medium text-gray-700">Combined Quality Score</span>
+                <span class="text-lg font-bold text-gray-900">{{ quality_data.combined_score|round(1) }}/{{ quality_data.max_possible }}</span>
             </div>
             <div class="w-full bg-gray-200 rounded-full h-3">
                 <div class="h-3 rounded-full quality-bar" 
-                     style="width: {{ (quality_data.total_score / quality_data.max_possible) * 100 }}%"></div>
+                     style="width: {{ (quality_data.combined_score / quality_data.max_possible) * 100 }}%"></div>
             </div>
             <div class="mt-2 text-center">
                 <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium quality-badge text-white">
                     {{ quality_data.quality_level }}
                 </span>
+            </div>
+        </div>
+        
+        <!-- Enhanced Quality Breakdown -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="text-center p-3 bg-blue-50 rounded-lg">
+                <div class="text-lg font-bold text-blue-600">{{ quality_data.ttp_score }}</div>
+                <div class="text-xs text-blue-800">TTP Quality</div>
+            </div>
+            <div class="text-center p-3 bg-green-50 rounded-lg">
+                <div class="text-lg font-bold text-green-600">{{ quality_data.llm_score }}</div>
+                <div class="text-xs text-green-800">LLM Quality</div>
+            </div>
+            <div class="text-center p-3 bg-purple-50 rounded-lg">
+                <div class="text-lg font-bold text-purple-600">{{ quality_data.tactical_score }}</div>
+                <div class="text-xs text-purple-800">Tactical Score</div>
             </div>
         </div>
 
@@ -163,29 +179,76 @@
             <div>
                 <h3 class="text-lg font-medium text-gray-900 mb-3">Quality Factors</h3>
                 <div class="space-y-3">
-                    {% for factor, score in quality_data.items() %}
-                        {% if factor not in ['total_score', 'max_possible', 'quality_level', 'recommendation'] %}
-                        <div class="flex items-center justify-between">
-                            <span class="text-sm text-gray-700">{{ factor.replace('_', ' ').title() }}</span>
-                            <div class="flex items-center space-x-2">
-                                <div class="w-16 bg-gray-200 rounded-full h-2">
-                                    <div class="h-2 rounded-full bg-blue-500" 
-                                         style="width: {{ (score / 15) * 100 }}%"></div>
-                                </div>
-                                <span class="text-sm font-medium text-gray-900">{{ score }}</span>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700">Content Structure</span>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-16 bg-gray-200 rounded-full h-2">
+                                <div class="h-2 rounded-full bg-blue-500" 
+                                     style="width: {{ (quality_data.structure_score / 25) * 100 }}%"></div>
                             </div>
+                            <span class="text-sm font-medium text-gray-900">{{ quality_data.structure_score }}/25</span>
                         </div>
-                        {% endif %}
-                    {% endfor %}
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700">Technical Depth</span>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-16 bg-gray-200 rounded-full h-2">
+                                <div class="h-2 rounded-full bg-green-500" 
+                                     style="width: {{ (quality_data.technical_score / 25) * 100 }}%"></div>
+                            </div>
+                            <span class="text-sm font-medium text-gray-900">{{ quality_data.technical_score }}/25</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700">Intelligence Value</span>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-16 bg-gray-200 rounded-full h-2">
+                                <div class="h-2 rounded-full bg-purple-500" 
+                                     style="width: {{ (quality_data.intelligence_score / 25) * 100 }}%"></div>
+                            </div>
+                            <span class="text-sm font-medium text-gray-900">{{ quality_data.intelligence_score }}/25</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Recommendation -->
+            <!-- LLM Quality Assessment Details -->
             <div>
-                <h3 class="text-lg font-medium text-gray-900 mb-3">Recommendation</h3>
-                <div class="p-4 bg-blue-50 rounded-lg">
-                    <p class="text-blue-800">{{ quality_data.recommendation }}</p>
+                <h3 class="text-lg font-medium text-gray-900 mb-3">LLM Quality Assessment</h3>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700">Classification</span>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                            {{ quality_data.classification }}
+                        </span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700">Hunting Priority</span>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                            {% if quality_data.hunting_priority == 'High' %}bg-red-100 text-red-800
+                            {% elif quality_data.hunting_priority == 'Medium' %}bg-yellow-100 text-yellow-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ quality_data.hunting_priority }}
+                        </span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700">Strategic Score</span>
+                        <span class="text-sm font-medium text-gray-900">{{ quality_data.strategic_score }}/100</span>
+                    </div>
                 </div>
+                
+                {% if quality_data.recommendations %}
+                <div class="mt-4">
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">Recommendations</h4>
+                    <div class="space-y-2">
+                        {% for rec in quality_data.recommendations %}
+                        <div class="text-sm text-gray-600 bg-blue-50 p-2 rounded">
+                            💡 {{ rec }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -236,7 +299,7 @@
         });
         
         // Set quality colors based on score
-        const qualityScore = {{ quality_data.total_score }};
+        const qualityScore = {{ quality_data.combined_score }};
         const qualityBar = document.querySelector('.quality-bar');
         const qualityBadge = document.querySelector('.quality-badge');
         
