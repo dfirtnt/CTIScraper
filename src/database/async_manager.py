@@ -4,6 +4,7 @@ Modern Async Database Manager for CTI Scraper
 Uses PostgreSQL with SQLAlchemy async for production-grade performance.
 """
 
+import os
 import asyncio
 import logging
 from typing import List, Optional, Dict, Any, AsyncGenerator
