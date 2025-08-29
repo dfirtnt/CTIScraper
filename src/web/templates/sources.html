@@ -1,0 +1,415 @@
+{% extends "base.html" %}
+
+{% block title %}Sources - CTI Scraper{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="bg-white rounded-lg shadow-sm p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">Threat Intelligence Sources</h1>
+                <p class="mt-2 text-gray-600">Manage and monitor your threat intelligence collection sources</p>
+            </div>
+            <div class="text-right">
+                <p class="text-sm text-gray-500">Total Sources</p>
+                <p class="text-2xl font-bold text-blue-600">{{ sources|length }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Database Status Banner -->
+    <div id="dbStatusBanner" class="hidden bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                <span class="text-yellow-400 text-lg">⚠️</span>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-yellow-800">Database Status</h3>
+                <p class="text-sm text-yellow-700">
+                    The database is experiencing temporary locking issues. 
+                    Source status changes may not persist until you refresh the page.
+                </p>
+            </div>
+            <div class="ml-auto pl-3">
+                <button onclick="window.location.reload()" 
+                        class="bg-yellow-100 text-yellow-800 rounded-md px-3 py-1 text-sm font-medium hover:bg-yellow-200">
+                    🔄 Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sources List -->
+    <div class="bg-white rounded-lg shadow-sm">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-medium text-gray-900">Configured Sources</h3>
+            <p class="text-sm text-gray-500">All threat intelligence sources and their current status</p>
+        </div>
+
+        {% if sources %}
+        <div class="divide-y divide-gray-200">
+            {% for source in sources %}
+            <div class="px-6 py-4 hover:bg-gray-50 transition-colors">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center space-x-2 mb-2">
+                            <h4 class="text-lg font-medium text-gray-900">{{ source.name }}</h4>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                         {% if source.active %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+                                {% if source.active %}Active{% else %}Inactive{% endif %}
+                            </span>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                Tier {{ source.tier }}
+                            </span>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                            <div>
+                                <p class="text-sm text-gray-500">URL</p>
+                                <p class="text-sm font-medium text-gray-900 break-all">{{ source.url }}</p>
+                            </div>
+                            {% if source.rss_url %}
+                            <div>
+                                <p class="text-sm text-gray-500">RSS Feed</p>
+                                <p class="text-sm font-medium text-gray-900 break-all">{{ source.rss_url }}</p>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+                            <div>
+                                <p class="text-sm text-gray-500">Collection Method</p>
+                                <p class="text-sm font-medium text-gray-900">
+                                    {% if source.rss_url %}RSS Feed{% else %}Web Scraping{% endif %}
+                                </p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Last Check</p>
+                                <p class="text-sm font-medium text-gray-900">
+                                    {% if source.last_check %}{{ source.last_check.strftime('%Y-%m-%d %H:%M') }}{% else %}Never{% endif %}
+                                </p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Articles Collected</p>
+                                <p class="text-sm font-medium text-gray-900">{{ source.articles_count or 0 }}</p>
+                            </div>
+                        </div>
+
+                        {% if source.description %}
+                        <div class="mb-3">
+                            <p class="text-sm text-gray-500">Description</p>
+                            <p class="text-sm text-gray-900">{{ source.description }}</p>
+                        </div>
+                        {% endif %}
+
+                        <div class="flex items-center space-x-2">
+                            <button onclick="toggleSourceStatus({{ source.id }})" class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                                <span class="mr-2">⚙️</span>
+                                Edit
+                            </button>
+                            <button onclick="testSource({{ source.id }})" class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                                <span class="mr-2">🔄</span>
+                                Test
+                            </button>
+                            <button onclick="showSourceStats({{ source.id }})" class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                                <span class="mr-2">📊</span>
+                                Stats
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="px-6 py-12 text-center">
+            <div class="text-gray-400 text-6xl mb-4">🔗</div>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">No sources configured</h3>
+            <p class="text-gray-500">Configure threat intelligence sources to start collecting data.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Source Statistics -->
+    {% if sources %}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Active Sources -->
+        <div class="bg-white rounded-lg shadow-sm p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
+                        <span class="text-white text-lg">✅</span>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Active Sources</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ sources|selectattr('active')|list|length }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- RSS Sources -->
+        <div class="bg-white rounded-lg shadow-sm p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center">
+                        <span class="text-white text-lg">📡</span>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">RSS Sources</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ sources|selectattr('rss_url')|list|length }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tier 1 Sources -->
+        <div class="bg-white rounded-lg shadow-sm p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-yellow-500 rounded-md flex items-center justify-center">
+                        <span class="text-white text-lg">⭐</span>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Tier 1 Sources</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ sources|selectattr('tier', 'equalto', 1)|list|length }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Quick Actions -->
+    <div class="bg-white rounded-lg shadow-sm p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <a href="/" class="flex items-center px-4 py-3 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                <span class="mr-3">🏠</span>
+                Dashboard
+            </a>
+            <a href="/articles" class="flex items-center px-4 py-3 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                <span class="mr-3">📰</span>
+                View Articles
+            </a>
+            <button onclick="window.location.reload()" class="flex items-center px-4 py-3 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                <span class="mr-3">🔄</span>
+                Refresh
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal for displaying results -->
+<div id="resultModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+            <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+        </div>
+        <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div class="flex items-start">
+                    <div class="mt-3 text-center sm:mt-0 sm:text-left">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900" id="modalTitle">
+                            Source Action Result
+                        </h3>
+                        <div class="mt-2">
+                            <div id="modalContent" class="text-sm text-gray-500">
+                                <!-- Content will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button type="button" onclick="closeModal()" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function testSource(sourceId) {
+    try {
+        showLoadingModal('Testing Source', 'Testing source connectivity...');
+        
+        const response = await fetch(`/api/sources/${sourceId}/test`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            let content = `<div class="space-y-3">`;
+            content += `<p><strong>Source:</strong> ${result.source_name}</p>`;
+            content += `<p><strong>Overall Status:</strong> <span class="${result.overall_success ? 'text-green-600' : 'text-red-600'}">${result.overall_success ? '✅ Success' : '❌ Failed'}</span></p>`;
+            content += `<div class="mt-4"><strong>Test Results:</strong></div>`;
+            
+            for (const test of result.tests) {
+                content += `<div class="border border-gray-200 rounded p-3 mt-2">`;
+                content += `<p><strong>${test.type.replace('_', ' ').toUpperCase()}:</strong></p>`;
+                content += `<p><strong>URL:</strong> <span class="font-mono text-xs">${test.url}</span></p>`;
+                content += `<p><strong>Status:</strong> <span class="${test.success ? 'text-green-600' : 'text-red-600'}">${test.success ? '✅ Success' : '❌ Failed'}</span></p>`;
+                
+                if (test.status) {
+                    content += `<p><strong>HTTP Status:</strong> ${test.status}</p>`;
+                }
+                if (test.response_time_ms) {
+                    content += `<p><strong>Response Time:</strong> ${Math.round(test.response_time_ms)}ms</p>`;
+                }
+                if (test.error) {
+                    content += `<p><strong>Error:</strong> <span class="text-red-600 font-mono text-xs">${test.error}</span></p>`;
+                }
+                content += `</div>`;
+            }
+            content += `</div>`;
+            
+            showModal('Source Test Results', content);
+        } else {
+            showModal('Test Failed', `<p class="text-red-600">Failed to test source: ${result.detail || 'Unknown error'}</p>`);
+        }
+    } catch (error) {
+        showModal('Test Error', `<p class="text-red-600">Error testing source: ${error.message}</p>`);
+    }
+}
+
+async function showSourceStats(sourceId) {
+    try {
+        showLoadingModal('Loading Stats', 'Fetching source statistics...');
+        
+        const response = await fetch(`/api/sources/${sourceId}/stats`);
+        const stats = await response.json();
+        
+        if (response.ok) {
+            let content = `<div class="space-y-3">`;
+            content += `<p><strong>Source:</strong> ${stats.source_name}</p>`;
+                            content += `<p><strong>Status:</strong> <span class="${stats.active ? 'text-green-600' : 'text-red-600'}">${stats.active ? 'Active' : 'Inactive'}</span></p>`;
+            content += `<p><strong>Tier:</strong> ${stats.tier}</p>`;
+            content += `<p><strong>Collection Method:</strong> ${stats.collection_method}</p>`;
+            content += `<p><strong>Total Articles:</strong> ${stats.total_articles}</p>`;
+            content += `<p><strong>Average Content Length:</strong> ${stats.avg_content_length} characters</p>`;
+            content += `<p><strong>Average Quality Score:</strong> ${stats.avg_quality_score}/75</p>`;
+            content += `<p><strong>Last Check:</strong> ${stats.last_check ? new Date(stats.last_check).toLocaleString() : 'Never'}</p>`;
+            
+            if (Object.keys(stats.articles_by_date).length > 0) {
+                content += `<div class="mt-4"><strong>Recent Activity:</strong></div>`;
+                content += `<div class="max-h-32 overflow-y-auto">`;
+                const sortedDates = Object.keys(stats.articles_by_date).sort().reverse().slice(0, 10);
+                for (const date of sortedDates) {
+                    content += `<p class="text-xs">${date}: ${stats.articles_by_date[date]} articles</p>`;
+                }
+                content += `</div>`;
+            }
+            content += `</div>`;
+            
+            showModal('Source Statistics', content);
+        } else {
+            showModal('Stats Error', `<p class="text-red-600">Failed to load stats: ${stats.detail || 'Unknown error'}</p>`);
+        }
+    } catch (error) {
+        showModal('Stats Error', `<p class="text-red-600">Error loading stats: ${error.message}</p>`);
+    }
+}
+
+async function toggleSourceStatus(sourceId) {
+    try {
+        showLoadingModal('Updating Source', 'Toggling source status...');
+        
+        const response = await fetch(`/api/sources/${sourceId}/toggle`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            let content = `<div class="space-y-3">`;
+            content += `<p><strong>Source:</strong> ${result.source_name}</p>`;
+            content += `<p><strong>Previous Status:</strong> ${result.old_status ? 'Active' : 'Inactive'}</p>`;
+            content += `<p><strong>New Status:</strong> <span class="${result.new_status ? 'text-green-600' : 'text-red-600'}">${result.new_status ? 'Active' : 'Inactive'}</span></p>`;
+            content += `<p class="text-sm text-gray-500">${result.message}</p>`;
+            
+            if (result.success) {
+                content += `<div class="mt-3 p-3 bg-green-50 border border-green-200 rounded">`;
+                content += `<p class="text-sm text-green-800">✅ Status updated successfully!</p>`;
+                content += `</div>`;
+            }
+            
+            if (result.note) {
+                content += `<div class="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded">`;
+                content += `<p class="text-sm text-yellow-800"><strong>Note:</strong> ${result.note}</p>`;
+                content += `</div>`;
+            }
+            content += `</div>`;
+            
+            showModal('Source Status Updated', content);
+            
+            // Auto-refresh the page if database was updated
+            if (result.database_updated) {
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            } else {
+                // If database update failed, show a manual refresh button and status banner
+                setTimeout(() => {
+                    const modalContent = document.getElementById('modalContent');
+                    if (modalContent) {
+                        modalContent.innerHTML += `
+                            <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                                <p class="text-sm text-blue-800">
+                                    <strong>Manual Refresh Required:</strong> 
+                                    Click the refresh button below to see current status.
+                                </p>
+                                <button onclick="window.location.reload()" 
+                                        class="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                                    🔄 Refresh Page
+                                </button>
+                            </div>
+                        `;
+                    }
+                    
+                    // Show the database status banner
+                    const banner = document.getElementById('dbStatusBanner');
+                    if (banner) {
+                        banner.classList.remove('hidden');
+                    }
+                }, 1000);
+            }
+        } else {
+            showModal('Update Failed', `<p class="text-red-600">Failed to update source: ${result.detail || 'Unknown error'}</p>`);
+        }
+    } catch (error) {
+        showModal('Update Error', `<p class="text-red-600">Error updating source: ${error.message}</p>`);
+    }
+}
+
+function showModal(title, content) {
+    document.getElementById('modalTitle').textContent = title;
+    document.getElementById('modalContent').innerHTML = content;
+    document.getElementById('resultModal').classList.remove('hidden');
+}
+
+function showLoadingModal(title, message) {
+    showModal(title, `<div class="flex items-center space-x-3"><div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div><span>${message}</span></div>`);
+}
+
+function closeModal() {
+    document.getElementById('resultModal').classList.add('hidden');
+}
+
+// Close modal when clicking outside
+document.getElementById('resultModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeModal();
+    }
+});
+</script>
+{% endblock %}

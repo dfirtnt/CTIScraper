@@ -446,6 +446,25 @@ class DatabaseManager:
                 ArticleTable.discovered_at >= month_ago
             ).count()
             
+            # Add missing fields for web interface
+            stats['articles_last_24h'] = stats['articles_last_day']
+            
+            # Calculate database size (approximate for SQLite)
+            try:
+                if self.database_url.startswith("sqlite"):
+                    # For SQLite, get file size
+                    import os
+                    db_file = self.database_url.replace("sqlite:///", "")
+                    if os.path.exists(db_file):
+                        stats['database_size_mb'] = round(os.path.getsize(db_file) / (1024 * 1024), 2)
+                    else:
+                        stats['database_size_mb'] = 0.0
+                else:
+                    # For PostgreSQL, estimate size
+                    stats['database_size_mb'] = 0.0
+            except Exception:
+                stats['database_size_mb'] = 0.0
+            
             # Quality statistics
             avg_quality = session.query(func.avg(ArticleTable.quality_score)).filter(
                 ArticleTable.quality_score.isnot(None)

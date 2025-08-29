@@ -7,9 +7,9 @@ from pathlib import Path
 import yaml
 import logging
 
-from models.source import Source, SourceCreate, SourceConfig
-from database.manager import DatabaseManager
-from utils.http import HTTPClient
+from src.models.source import Source, SourceCreate, SourceConfig
+from src.database.manager import DatabaseManager
+from src.utils.http import HTTPClient
 from core.rss_parser import FeedValidator
 
 logger = logging.getLogger(__name__)

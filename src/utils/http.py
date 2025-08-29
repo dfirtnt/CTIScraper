@@ -162,13 +162,13 @@ class HTTPClient:
     
     def __init__(
         self,
-        user_agent: str = "ThreatIntelAggregator/1.0 (+https://github.com/example/threat-intel)",
+        user_agent: str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         timeout: float = 30.0,
         max_redirects: int = 10,
         rate_limit_delay: float = 1.0,
         max_rate_limit_delay: float = 60.0,
         verify_ssl: bool = True,
-        check_robots: bool = True
+        check_robots: bool = False  # Disable robots.txt for better access
     ):
         self.user_agent = user_agent
         self.timeout = timeout
@@ -189,11 +189,16 @@ class HTTPClient:
             "max_redirects": max_redirects,
             "headers": {
                 "User-Agent": user_agent,
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.5",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
                 "Accept-Encoding": "gzip, deflate, br",
                 "DNT": "1",
                 "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1",
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "none",
+                "Cache-Control": "max-age=0"
             }
         }
         

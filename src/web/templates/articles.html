@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+
+{% block title %}Articles - CTI Scraper{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="bg-white rounded-lg shadow-sm p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">Threat Intelligence Articles</h1>
+                <p class="mt-2 text-gray-600">Browse and search collected threat intelligence articles</p>
+            </div>
+            <div class="text-right">
+                <p class="text-sm text-gray-500">Total Articles</p>
+                <p class="text-2xl font-bold text-blue-600">{{ pagination.total_articles }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-lg shadow-sm p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Filters & Search</h3>
+        <form method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <!-- Search -->
+            <div>
+                <label for="search" class="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                <input type="text" name="search" id="search" value="{{ filters.search or '' }}" 
+                       placeholder="Search titles and content..." 
+                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+            </div>
+
+            <!-- Source Filter -->
+            <div>
+                <label for="source" class="block text-sm font-medium text-gray-700 mb-1">Source</label>
+                <select name="source" id="source" 
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">All Sources</option>
+                    {% for source in sources %}
+                    <option value="{{ source.id }}" {% if filters.source == source.id|string %}selected{% endif %}>
+                        {{ source.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Quality Filter -->
+            <div>
+                <label for="quality_min" class="block text-sm font-medium text-gray-700 mb-1">Min Quality Score</label>
+                <select name="quality_min" id="quality_min" 
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">Any Quality</option>
+                    <option value="60" {% if filters.quality_min == 60 %}selected{% endif %}>Excellent (60+)</option>
+                    <option value="45" {% if filters.quality_min == 45 %}selected{% endif %}>Good (45+)</option>
+                    <option value="30" {% if filters.quality_min == 30 %}selected{% endif %}>Fair (30+)</option>
+                    <option value="0" {% if filters.quality_min == 0 %}selected{% endif %}>Limited (0+)</option>
+                </select>
+            </div>
+
+            <!-- Per Page -->
+            <div>
+                <label for="per_page" class="block text-sm font-medium text-gray-700 mb-1">Per Page</label>
+                <select name="per_page" id="per_page" 
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    <option value="20" {% if pagination.per_page == 20 %}selected{% endif %}>20</option>
+                    <option value="50" {% if pagination.per_page == 50 %}selected{% endif %}>50</option>
+                    <option value="100" {% if pagination.per_page == 100 %}selected{% endif %}>100</option>
+                </select>
+            </div>
+        </form>
+
+        <!-- Filter Summary -->
+        {% if filters.search or filters.source or filters.quality_min %}
+        <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+            <p class="text-sm text-blue-800">
+                <strong>Active Filters:</strong>
+                {% if filters.search %}Search: "{{ filters.search }}"{% endif %}
+                {% if filters.source %}Source: {{ filters.source }}{% endif %}
+                {% if filters.quality_min %}Quality: {{ filters.quality_min }}+{% endif %}
+                <a href="/articles" class="ml-2 text-blue-600 hover:text-blue-800 underline">Clear all</a>
+            </p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Articles List -->
+    <div class="bg-white rounded-lg shadow-sm">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-medium text-gray-900">
+                    Articles ({{ pagination.start_idx }}-{{ pagination.end_idx }} of {{ pagination.total_articles }})
+                </h3>
+                <div class="text-sm text-gray-500">
+                    Page {{ pagination.page }} of {{ pagination.total_pages }}
+                </div>
+            </div>
+        </div>
+
+        {% if articles %}
+        <div class="divide-y divide-gray-200">
+            {% for article in articles %}
+            <div class="px-6 py-4 hover:bg-gray-50 transition-colors">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center space-x-2 mb-2">
+                            <a href="/articles/{{ article.id }}" class="text-lg font-medium text-blue-600 hover:text-blue-800">
+                                {{ article.title }}
+                            </a>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                #{{ article.id }}
+                            </span>
+                        </div>
+                        
+                        <div class="flex items-center space-x-4 text-sm text-gray-500 mb-2">
+                            <span>Source: 
+                                {% set source_name = article.source_id %}
+                                {% for source in sources %}
+                                    {% if source.id == article.source_id %}
+                                        {% set source_name = source.name %}
+                                    {% endif %}
+                                {% endfor %}
+                                {% if article.canonical_url %}
+                                    <a href="{{ article.canonical_url }}" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline">
+                                        {{ source_name }}
+                                    </a>
+                                {% else %}
+                                    {{ source_name }}
+                                {% endif %}
+                            </span>
+                            {% if article.published_at %}
+                            <span>Published: {{ article.published_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                            {% endif %}
+                            <span>Content: {{ article.content|length }} characters</span>
+                        </div>
+
+                        <p class="text-gray-600 mb-3">
+                            {{ article.content[:300] }}{% if article.content|length > 300 %}...{% endif %}
+                        </p>
+
+                        <div class="flex items-center space-x-2">
+                            <a href="/articles/{{ article.id }}" class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-blue-700 bg-blue-100 hover:bg-blue-200 transition-colors">
+                                View Details
+                            </a>
+                            {% if article.canonical_url %}
+                            <a href="{{ article.canonical_url }}" target="_blank" class="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                                Original Source
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="px-6 py-12 text-center">
+            <div class="text-gray-400 text-6xl mb-4">📰</div>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">No articles found</h3>
+            <p class="text-gray-500">
+                {% if filters.search or filters.source or filters.quality_min %}
+                Try adjusting your filters or search terms.
+                {% else %}
+                No articles have been collected yet. Start by running the collection process.
+                {% endif %}
+            </p>
+        </div>
+        {% endif %}
+
+        <!-- Pagination -->
+        {% if pagination.total_pages > 1 %}
+        <div class="px-6 py-4 bg-gray-50 border-t border-gray-200">
+            <div class="flex items-center justify-between">
+                <div class="text-sm text-gray-700">
+                    Showing {{ pagination.start_idx }} to {{ pagination.end_idx }} of {{ pagination.total_articles }} results
+                </div>
+                <div class="flex items-center space-x-2">
+                    {% if pagination.page > 1 %}
+                    <a href="?page={{ pagination.page - 1 }}&per_page={{ pagination.per_page }}{% if filters.search %}&search={{ filters.search }}{% endif %}{% if filters.source %}&source={{ filters.source }}{% endif %}{% if filters.quality_min %}&quality_min={{ filters.quality_min }}{% endif %}" 
+                       class="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                        Previous
+                    </a>
+                    {% endif %}
+
+                    {% for page_num in range(1, pagination.total_pages + 1) %}
+                        {% if page_num == pagination.page %}
+                        <span class="px-3 py-2 border border-blue-500 rounded-md text-sm font-medium text-blue-700 bg-blue-50">
+                            {{ page_num }}
+                        </span>
+                        {% elif page_num <= 3 or page_num > pagination.total_pages - 3 or (page_num >= pagination.page - 1 and page_num <= pagination.page + 1) %}
+                        <a href="?page={{ page_num }}&per_page={{ pagination.per_page }}{% if filters.search %}&search={{ filters.search }}{% endif %}{% if filters.source %}&source={{ filters.source }}{% endif %}{% if filters.quality_min %}&quality_min={{ filters.quality_min }}{% endif %}" 
+                           class="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                            {{ page_num }}
+                        </a>
+                        {% elif page_num == 4 and pagination.page > 4 %}
+                        <span class="px-3 py-2 text-sm text-gray-500">...</span>
+                        {% elif page_num == pagination.total_pages - 2 and pagination.page < pagination.total_pages - 2 %}
+                        <span class="px-3 py-2 text-sm text-gray-500">...</span>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if pagination.page < pagination.total_pages %}
+                    <a href="?page={{ pagination.page + 1 }}&per_page={{ pagination.per_page }}{% if filters.search %}&search={{ filters.search }}{% endif %}{% if filters.source %}&source={{ filters.source }}{% endif %}{% if filters.quality_min %}&quality_min={{ filters.quality_min }}{% endif %}" 
+                       class="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                        Next
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Auto-submit form when filters change
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.querySelector('form');
+        const inputs = form.querySelectorAll('select, input');
+        
+        inputs.forEach(input => {
+            input.addEventListener('change', function() {
+                form.submit();
+            });
+        });
+    });
+
+    // Debounced search for better performance
+    let searchTimeout;
+    const searchInput = document.getElementById('search');
+    searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            this.form.submit();
+        }, 500);
+    });
+</script>
+{% endblock %}

@@ -6,9 +6,9 @@ from datetime import datetime, timedelta
 import logging
 import hashlib
 
-from models.article import Article, ArticleCreate
-from models.source import Source
-from utils.content import (
+from src.models.article import Article, ArticleCreate
+from src.models.source import Source
+from src.utils.content import (
     ContentCleaner, DateExtractor, QualityScorer, 
     validate_content, MetadataExtractor
 )

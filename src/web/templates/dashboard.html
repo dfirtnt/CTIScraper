@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - CTI Scraper{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="bg-white rounded-lg shadow-sm p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">Threat Intelligence Dashboard</h1>
+                <p class="mt-2 text-gray-600">Real-time overview of collected threat intelligence and analysis</p>
+            </div>
+            <div class="text-right">
+                <p class="text-sm text-gray-500">Last Updated</p>
+                <p class="text-lg font-semibold text-gray-900">{{ current_time }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <!-- Total Articles -->
+        <div class="bg-white rounded-lg shadow-sm p-6 card-hover">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center">
+                        <span class="text-white text-lg">📰</span>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Total Articles</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ stats.total_articles }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Total Sources -->
+        <div class="bg-white rounded-lg shadow-sm p-6 card-hover">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
+                        <span class="text-white text-lg">🔗</span>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Active Sources</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ stats.total_sources }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="bg-white rounded-lg shadow-sm p-6 card-hover">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-yellow-500 rounded-md flex items-center justify-center">
+                        <span class="text-white text-lg">⚡</span>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Last 24h</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ stats.articles_last_24h }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Database Size -->
+        <div class="bg-white rounded-lg shadow-sm p-6 card-hover">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
+                        <span class="text-white text-lg">💾</span>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Database Size</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ "%.1f"|format(stats.database_size_mb) }} MB</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Articles and Quick Actions -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Recent Articles -->
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-lg shadow-sm">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h3 class="text-lg font-medium text-gray-900">Recent Articles</h3>
+                    <p class="text-sm text-gray-500">Latest threat intelligence collected</p>
+                </div>
+                <div class="divide-y divide-gray-200">
+                    {% for article in recent_articles %}
+                    <div class="px-6 py-4 hover:bg-gray-50 transition-colors">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1 min-w-0">
+                                <a href="/articles/{{ article.id }}" class="text-sm font-medium text-blue-600 hover:text-blue-800">
+                                    {{ article.title[:80] }}{% if article.title|length > 80 %}...{% endif %}
+                                </a>
+                                <p class="mt-1 text-xs text-gray-500">
+                                    Source: {{ article.source_id }} | 
+                                    {% if article.published_at %}
+                                        {{ article.published_at.strftime('%Y-%m-%d %H:%M') }}
+                                    {% else %}
+                                        Unknown date
+                                    {% endif %}
+                                </p>
+                                <p class="mt-2 text-sm text-gray-600">
+                                    {{ article.content[:150] }}{% if article.content|length > 150 %}...{% endif %}
+                                </p>
+                            </div>
+                            <div class="ml-4 flex-shrink-0">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                    {{ article.content|length }} chars
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="px-6 py-4 bg-gray-50 border-t border-gray-200">
+                    <a href="/articles" class="text-sm font-medium text-blue-600 hover:text-blue-800">
+                        View all articles →
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="space-y-6">
+            <!-- Quick Actions -->
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
+                <div class="space-y-3">
+                    <a href="/analysis" class="w-full flex items-center px-4 py-3 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                        <span class="mr-3">🔍</span>
+                        TTP Analysis
+                    </a>
+                    <a href="/sources" class="w-full flex items-center px-4 py-3 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                        <span class="mr-3">⚙️</span>
+                        Manage Sources
+                    </a>
+                    <button onclick="window.location.reload()" class="w-full flex items-center px-4 py-3 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                        <span class="mr-3">🔄</span>
+                        Refresh Data
+                    </button>
+                </div>
+            </div>
+
+            <!-- Source Status -->
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Source Status</h3>
+                <div class="space-y-3">
+                    {% for source in sources[:5] %}
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <div class="w-2 h-2 rounded-full {% if source.active %}bg-green-400{% else %}bg-red-400{% endif %} mr-3"></div>
+                            <span class="text-sm font-medium text-gray-900">{{ source.name[:20] }}{% if source.name|length > 20 %}...{% endif %}</span>
+                        </div>
+                        <span class="text-xs text-gray-500">{{ source.tier }}</span>
+                    </div>
+                    {% endfor %}
+                    {% if sources|length > 5 %}
+                    <div class="pt-2 border-t border-gray-200">
+                        <a href="/sources" class="text-sm text-blue-600 hover:text-blue-800">
+                            View all {{ sources|length }} sources →
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Health -->
+    <div class="bg-white rounded-lg shadow-sm p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">System Health</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="text-center">
+                <div class="text-2xl font-bold text-green-600">{{ stats.total_articles }}</div>
+                <div class="text-sm text-gray-500">Articles Collected</div>
+            </div>
+            <div class="text-center">
+                <div class="text-2xl font-bold text-blue-600">{{ stats.total_sources }}</div>
+                <div class="text-sm text-gray-500">Sources Active</div>
+            </div>
+            <div class="text-center">
+                <div class="text-2xl font-bold text-purple-600">{{ "%.1f"|format(stats.database_size_mb) }}</div>
+                <div class="text-sm text-gray-500">Database Size (MB)</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Auto-refresh dashboard data every 30 seconds
+    setInterval(() => {
+        // Refresh only the statistics and recent articles
+        htmx.ajax('GET', '/', {target: 'main', swap: 'innerHTML'});
+    }, 30000);
+</script>
+{% endblock %}

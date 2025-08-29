@@ -1,482 +1,328 @@
-# 🤝 Contributing to CTI Scraper
+# Contributing to CTI Scraper
 
 Thank you for your interest in contributing to CTI Scraper! This document provides guidelines and information for contributors.
 
-## 📋 Table of Contents
-
-- [Code of Conduct](#-code-of-conduct)
-- [Getting Started](#-getting-started)
-- [Development Setup](#-development-setup)
-- [Contributing Guidelines](#-contributing-guidelines)
-- [Code Standards](#-code-standards)
-- [Testing](#-testing)
-- [Documentation](#-documentation)
-- [Submitting Changes](#-submitting-changes)
-
-## 🤝 Code of Conduct
-
-We are committed to providing a welcoming and inclusive environment for all contributors. Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md).
-
-### Our Pledge
-
-- Be respectful and inclusive
-- Welcome newcomers and help them learn
-- Focus on constructive feedback
-- Maintain professionalism in all interactions
-
 ## 🚀 Getting Started
 
-### Ways to Contribute
+### Prerequisites
+- Python 3.11+
+- Docker and Docker Compose
+- Git
 
-- 🐛 **Bug Reports**: Found a bug? Let us know!
-- ✨ **Feature Requests**: Have an idea? We'd love to hear it!
-- 📝 **Documentation**: Help improve our docs
-- 🔧 **Code Contributions**: Submit bug fixes or new features
-- 🧪 **Testing**: Help test new features and report issues
-- 🎨 **UX/UI**: Improve the CLI interface and user experience
+### Development Setup
+1. Fork the repository
+2. Clone your fork: `git clone https://github.com/yourusername/ctiscraper.git`
+3. Create a virtual environment: `python -m venv venv`
+4. Activate it: `source venv/bin/activate` (Linux/Mac) or `venv\Scripts\activate` (Windows)
+5. Install dependencies: `pip install -r requirements.txt`
+6. Copy environment: `cp env.example .env`
+7. Start services: `docker-compose up -d`
 
-### Before You Start
+## 🔧 Development Workflow
 
-1. **Check existing issues** to avoid duplicate work
-2. **Join the discussion** in relevant GitHub issues
-3. **Read the documentation** to understand the project
-4. **Set up your development environment**
-
-## 🛠️ Development Setup
-
-### Quick Setup
-
+### 1. Create a Feature Branch
 ```bash
-# 1. Fork and clone the repository
-git clone https://github.com/yourusername/ctiscraper.git
-cd ctiscraper
-
-# 2. Automated setup
-python3 setup_env.py
-
-# 3. Activate virtual environment
-source venv/bin/activate
-
-# 4. Verify installation
-./threat-intel --help
+git checkout -b feature/your-feature-name
 ```
 
-### Manual Setup
+### 2. Make Your Changes
+- Follow the coding standards below
+- Add tests for new functionality
+- Update documentation as needed
 
+### 3. Test Your Changes
 ```bash
-# 1. Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
+# Run tests
+pytest
 
-# 2. Install dependencies
-pip install -r requirements.txt
+# Run linting
+flake8 src/
+black --check src/
+isort --check-only src/
+mypy src/
 
-# 3. Install development tools
-pip install pre-commit
-
-# 4. Set up pre-commit hooks
-pre-commit install
+# Run security checks
+bandit -r src/
+safety check
 ```
 
-### Development Dependencies
-
-The following tools are used for development:
-
-- **black**: Code formatting
-- **flake8**: Linting and style checking
-- **mypy**: Static type checking
-- **pytest**: Testing framework
-- **bandit**: Security scanning
-- **safety**: Dependency vulnerability scanning
-
-## 📋 Contributing Guidelines
-
-### Issue Guidelines
-
-#### Bug Reports
-
-When reporting bugs, please include:
-
-```markdown
-**Bug Description**
-A clear description of what the bug is.
-
-**Reproduction Steps**
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
-
-**Expected Behavior**
-What you expected to happen.
-
-**Actual Behavior**
-What actually happened.
-
-**Environment**
-- OS: [e.g. macOS 12.0]
-- Python version: [e.g. 3.11.0]
-- CTI Scraper version: [e.g. 1.0.0]
-
-**Additional Context**
-Add any other context about the problem here.
-```
-
-#### Feature Requests
-
-For new features, please provide:
-
-```markdown
-**Feature Description**
-A clear description of the feature you'd like to see.
-
-**Use Case**
-Explain why this feature would be useful.
-
-**Proposed Solution**
-Describe how you envision this working.
-
-**Alternatives Considered**
-Any alternative solutions you've considered.
-
-**Additional Context**
-Screenshots, mockups, or examples if applicable.
-```
-
-### Pull Request Guidelines
-
-1. **Create a feature branch** from `develop`
-2. **Make your changes** with appropriate tests
-3. **Follow code standards** (see below)
-4. **Update documentation** if needed
-5. **Add tests** for new functionality
-6. **Ensure all tests pass**
-7. **Submit a pull request**
-
-#### Pull Request Template
-
-```markdown
-## Description
-Brief description of changes made.
-
-## Type of Change
-- [ ] Bug fix (non-breaking change that fixes an issue)
-- [ ] New feature (non-breaking change that adds functionality)
-- [ ] Breaking change (fix or feature that causes existing functionality to not work as expected)
-- [ ] Documentation update
-
-## Testing
-- [ ] Tests pass locally
-- [ ] New tests added for new functionality
-- [ ] Manual testing performed
-
-## Checklist
-- [ ] Code follows project style guidelines
-- [ ] Self-review of code completed
-- [ ] Code is commented where necessary
-- [ ] Documentation updated
-- [ ] No new security vulnerabilities introduced
-```
-
-## ✅ Code Standards
-
-### Python Style Guide
-
-We follow [PEP 8](https://pep8.org/) with some modifications:
-
-```python
-# Good: Clear, descriptive names
-def collect_threat_intelligence(source: Source) -> List[Article]:
-    """Collect threat intelligence from a specific source."""
-    pass
-
-# Good: Type hints for all functions
-async def fetch_rss_feed(url: str, timeout: int = 30) -> Optional[Dict[str, Any]]:
-    """Fetch and parse RSS feed from URL."""
-    pass
-
-# Good: Proper error handling
-try:
-    result = await process_article(article)
-except ValidationError as e:
-    logger.error(f"Article validation failed: {e}")
-    return None
-```
-
-### Code Formatting
-
+### 4. Commit Your Changes
 ```bash
-# Format code with black
-black src/ tests/
-
-# Check formatting
-black --check src/ tests/
-
-# Sort imports
-isort src/ tests/
+git add .
+git commit -m "feat: add new feature description"
 ```
+
+### 5. Push and Create PR
+```bash
+git push origin feature/your-feature-name
+# Create Pull Request on GitHub
+```
+
+## 📝 Coding Standards
+
+### Python Code Style
+- Follow [PEP 8](https://pep8.org/) guidelines
+- Use [Black](https://black.readthedocs.io/) for code formatting
+- Use [isort](https://pycqa.github.io/isort/) for import sorting
+- Maximum line length: 88 characters (Black default)
 
 ### Type Hints
+- Use type hints for all function parameters and return values
+- Use `Optional[T]` for nullable values
+- Use `Union[T1, T2]` for multiple types
+- Use `List[T]`, `Dict[K, V]`, etc. for collections
 
-All functions should include type hints:
+### Documentation
+- Use Google-style docstrings for all public functions
+- Include examples in docstrings
+- Update README.md for user-facing changes
+- Add inline comments for complex logic
 
+### Example
 ```python
-from typing import List, Optional, Dict, Any
-from models.article import Article, ArticleCreate
-
-def process_articles(
-    articles: List[ArticleCreate], 
-    quality_threshold: float = 0.5
-) -> Dict[str, Any]:
-    """Process articles and return statistics."""
-    pass
-```
-
-### Documentation Standards
-
-#### Docstrings
-
-Use Google-style docstrings:
-
-```python
-def extract_content(html: str, selectors: List[str]) -> Optional[str]:
-    """Extract content from HTML using CSS selectors.
+def process_articles(articles: List[Article], limit: Optional[int] = None) -> Dict[str, int]:
+    """
+    Process a list of articles and return statistics.
     
     Args:
-        html: Raw HTML content to parse
-        selectors: List of CSS selectors to try in order
-        
+        articles: List of articles to process
+        limit: Maximum number of articles to process (None for all)
+    
     Returns:
-        Extracted text content or None if extraction fails
-        
-    Raises:
-        ValueError: If HTML is empty or invalid
+        Dictionary containing processing statistics
         
     Example:
-        >>> extract_content("<p>Hello</p>", ["p"])
-        "Hello"
+        >>> articles = [Article(id=1, title="Test")]
+        >>> stats = process_articles(articles, limit=10)
+        >>> print(stats)
+        {'processed': 1, 'errors': 0}
     """
+    # Implementation here
     pass
-```
-
-#### Comments
-
-```python
-# Good: Explain complex logic
-# Calculate content hash using title and content to improve deduplication
-# accuracy for articles that may have minor formatting differences
-content_hash = hashlib.sha256(f"{title}\n{content}".encode()).hexdigest()
-
-# Good: Explain business logic
-# Red Canary serves compressed content that corrupts during extraction,
-# so we use RSS summaries instead of fetching full articles
-if 'redcanary.com' in url.lower():
-    return self._use_rss_summary(entry)
 ```
 
 ## 🧪 Testing
 
 ### Test Structure
+- Tests go in `tests/` directory
+- Test files should be named `test_*.py`
+- Use descriptive test function names
+- Group related tests in classes
 
-```
-tests/
-├── unit/              # Unit tests
-│   ├── test_models/
-│   ├── test_core/
-│   └── test_utils/
-├── integration/       # Integration tests
-├── fixtures/          # Test data
-└── conftest.py       # Pytest configuration
-```
-
-### Writing Tests
-
+### Test Examples
 ```python
 import pytest
-from unittest.mock import Mock, patch
-from models.article import ArticleCreate
+from src.core.rss_parser import RSSParser
 
-class TestArticleModel:
-    """Test suite for Article model."""
+class TestRSSParser:
+    """Test RSS parser functionality."""
     
-    def test_article_creation_with_valid_data(self):
-        """Test creating article with valid data."""
-        article_data = {
-            "source_id": 1,
-            "canonical_url": "https://example.com/article",
-            "title": "Test Article",
-            "content": "Test content",
-            "published_at": datetime.now()
-        }
-        
-        article = ArticleCreate(**article_data)
-        assert article.title == "Test Article"
-        assert article.content_hash is not None
+    @pytest.fixture
+    def parser(self):
+        """Create RSS parser instance for testing."""
+        return RSSParser()
     
-    @pytest.mark.asyncio
-    async def test_rss_parser_with_mock_response(self):
-        """Test RSS parser with mocked HTTP response."""
-        with patch('httpx.AsyncClient.get') as mock_get:
-            mock_response = Mock()
-            mock_response.text = "<rss>...</rss>"
-            mock_get.return_value = mock_response
-            
-            parser = RSSParser()
-            result = await parser.parse_feed("https://example.com/feed")
-            
-            assert result is not None
+    def test_parse_feed_success(self, parser):
+        """Test successful RSS feed parsing."""
+        # Test implementation
+        pass
+    
+    def test_parse_feed_empty(self, parser):
+        """Test parsing empty RSS feed."""
+        # Test implementation
+        pass
 ```
 
 ### Running Tests
-
 ```bash
 # Run all tests
 pytest
 
+# Run specific test file
+pytest tests/test_rss_parser.py
+
 # Run with coverage
 pytest --cov=src --cov-report=html
 
-# Run specific test file
-pytest tests/unit/test_models/test_article.py
-
 # Run specific test
-pytest tests/unit/test_models/test_article.py::TestArticleModel::test_article_creation
-
-# Run tests in parallel
-pytest -n auto
+pytest tests/test_rss_parser.py::TestRSSParser::test_parse_feed_success
 ```
 
-## 📝 Documentation
+## 🔒 Security
 
-### Documentation Types
+### Before Submitting
+- Ensure no hardcoded credentials
+- Use environment variables for configuration
+- Validate all user inputs
+- Follow OWASP security guidelines
 
-1. **Code Documentation**: Docstrings and comments
-2. **User Documentation**: README, usage guides
-3. **Developer Documentation**: Architecture, contributing
-4. **API Documentation**: Generated from docstrings
+### Security Checklist
+- [ ] No secrets in code
+- [ ] Input validation implemented
+- [ ] SQL injection prevention
+- [ ] XSS protection
+- [ ] Rate limiting configured
+- [ ] CORS properly configured
 
-### Documentation Updates
+## 📚 Documentation
 
-When contributing, please update:
+### Code Documentation
+- All public functions must have docstrings
+- Include parameter types and return types
+- Provide usage examples
+- Document exceptions that may be raised
 
-- **README.md**: For user-facing changes
-- **CHANGELOG.md**: For all changes
-- **Code comments**: For complex logic
-- **Docstrings**: For new functions/classes
+### User Documentation
+- Update README.md for new features
+- Add configuration examples
+- Include troubleshooting guides
+- Keep installation instructions current
 
-## 📤 Submitting Changes
+## 🚫 What Not to Do
 
-### Commit Messages
+- Don't commit large binary files
+- Don't commit environment files (.env)
+- Don't commit database files
+- Don't commit temporary files
+- Don't commit secrets or credentials
+- Don't break existing functionality without discussion
 
-Use conventional commit format:
+## 🤝 Pull Request Guidelines
 
+### PR Title Format
+- `feat:` for new features
+- `fix:` for bug fixes
+- `docs:` for documentation changes
+- `style:` for formatting changes
+- `refactor:` for code refactoring
+- `test:` for adding tests
+- `chore:` for maintenance tasks
+
+### PR Description Template
+```markdown
+## Description
+Brief description of changes
+
+## Type of Change
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Breaking change
+- [ ] Documentation update
+
+## Testing
+- [ ] Tests pass locally
+- [ ] Added new tests
+- [ ] Updated existing tests
+
+## Checklist
+- [ ] Code follows style guidelines
+- [ ] Self-review completed
+- [ ] Documentation updated
+- [ ] No breaking changes
 ```
-type(scope): description
 
-[optional body]
+## 🐛 Bug Reports
 
-[optional footer]
+### Before Reporting
+1. Check existing issues
+2. Search documentation
+3. Try to reproduce the issue
+4. Check if it's a configuration issue
+
+### Bug Report Template
+```markdown
+## Bug Description
+Clear description of the issue
+
+## Steps to Reproduce
+1. Step 1
+2. Step 2
+3. Step 3
+
+## Expected Behavior
+What should happen
+
+## Actual Behavior
+What actually happens
+
+## Environment
+- OS: [e.g., Ubuntu 20.04]
+- Python: [e.g., 3.11.0]
+- CTI Scraper: [e.g., 1.0.0]
+
+## Additional Information
+Logs, screenshots, etc.
 ```
 
-Examples:
+## 💡 Feature Requests
+
+### Before Requesting
+1. Check if feature already exists
+2. Search existing issues
+3. Consider if it fits project scope
+4. Think about implementation approach
+
+### Feature Request Template
+```markdown
+## Feature Description
+Clear description of the feature
+
+## Use Case
+Why this feature is needed
+
+## Proposed Implementation
+How you think it could be implemented
+
+## Alternatives Considered
+Other approaches you considered
+
+## Additional Context
+Any other relevant information
 ```
-feat(rss): add support for Atom feeds
-fix(cli): resolve virtual environment detection issue
-docs(readme): update installation instructions
-test(parser): add tests for content extraction
-```
 
-Types:
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation
-- `test`: Testing
-- `refactor`: Code refactoring
-- `style`: Code style changes
-- `chore`: Maintenance tasks
+## 🏷️ Release Process
 
-### Branch Naming
+### Versioning
+We use [Semantic Versioning](https://semver.org/):
+- `MAJOR.MINOR.PATCH`
+- `MAJOR`: Breaking changes
+- `MINOR`: New features, backward compatible
+- `PATCH`: Bug fixes, backward compatible
 
-```
-feature/add-rss-support
-bugfix/fix-content-extraction
-hotfix/security-vulnerability
-docs/update-contributing-guide
-```
-
-### Review Process
-
-1. **Automated Checks**: CI/CD pipeline runs automatically
-2. **Code Review**: Maintainers review the code
-3. **Testing**: Manual testing for complex features
-4. **Documentation Review**: Ensure docs are updated
-5. **Security Review**: For security-related changes
-
-## 🎯 Development Areas
-
-### High-Priority Areas
-
-- **Performance optimization**: Async processing improvements
-- **Source support**: Adding new threat intelligence sources
-- **Content quality**: Improving content extraction and cleaning
-- **Testing**: Expanding test coverage
-- **Documentation**: User guides and examples
-
-### Good First Issues
-
-Look for issues labeled:
-- `good first issue`: Perfect for newcomers
-- `help wanted`: Community help needed
-- `documentation`: Documentation improvements
-- `testing`: Test-related tasks
-
-### Advanced Contributions
-
-- **Architecture improvements**: Core system enhancements
-- **Security features**: Authentication, encryption
-- **Scalability**: Database optimizations, caching
-- **New scrapers**: Support for additional source types
-
-## 🏆 Recognition
-
-Contributors are recognized in:
-
-- **CHANGELOG.md**: All contributors listed
-- **README.md**: Major contributors highlighted
-- **GitHub Contributors**: Automatic GitHub recognition
-- **Release Notes**: Significant contributions mentioned
+### Release Checklist
+- [ ] All tests pass
+- [ ] Documentation updated
+- [ ] Changelog updated
+- [ ] Version bumped
+- [ ] Release notes written
+- [ ] Security review completed
 
 ## 📞 Getting Help
 
 ### Communication Channels
-
 - **GitHub Issues**: For bugs and feature requests
 - **GitHub Discussions**: For questions and discussions
-- **Documentation**: Check the docs first
-- **Code Review**: Ask questions in pull requests
+- **Pull Requests**: For code contributions
 
-### Mentoring
+### Code Review Process
+1. Automated checks must pass
+2. At least one maintainer review
+3. All feedback addressed
+4. Tests pass after changes
+5. Documentation updated
 
-New contributors can:
+## 🎉 Recognition
 
-- **Ask questions** in issues or discussions
-- **Request mentoring** for complex contributions
-- **Join pair programming** sessions (when available)
-- **Attend community meetings** (if organized)
+Contributors will be:
+- Listed in the README
+- Mentioned in release notes
+- Credited in documentation
+- Invited to join the project
 
-## 📚 Additional Resources
+## 📄 License
 
-### Learning Resources
+By contributing, you agree that your contributions will be licensed under the MIT License.
 
-- **Python**: [Official Python Tutorial](https://docs.python.org/3/tutorial/)
-- **Async Programming**: [Real Python Async Guide](https://realpython.com/async-io-python/)
-- **SQLAlchemy**: [SQLAlchemy Tutorial](https://docs.sqlalchemy.org/en/14/tutorial/)
-- **Pydantic**: [Pydantic Documentation](https://pydantic-docs.helpmanual.io/)
-
-### Tools & Extensions
-
-- **VS Code Extensions**: Python, GitLens, Docker
-- **PyCharm Plugins**: Recommended for advanced development
-- **Command Line Tools**: git, curl, jq for testing
+---
 
 Thank you for contributing to CTI Scraper! 🚀

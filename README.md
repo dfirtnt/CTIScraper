@@ -1,375 +1,317 @@
-# 🔍 CTI Scraper
+# 🛡️ CTI Scraper - Modern Threat Intelligence Platform
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+**Enterprise-grade threat intelligence aggregation and analysis platform built with modern technologies.**
 
-A modern, asynchronous **Cyber Threat Intelligence (CTI) aggregator** that collects, processes, and analyzes threat intelligence from multiple sources using a sophisticated three-tier scraping strategy.
+## 🚀 **What's New in Version 2.0**
 
-## ✨ Features
+### **Architecture Improvements**
+- **PostgreSQL Database**: Replaced SQLite with production-grade PostgreSQL
+- **Async/Await**: Full async support with FastAPI and SQLAlchemy
+- **Connection Pooling**: Efficient database connection management
+- **Background Tasks**: Celery worker system for async operations
+- **Redis Caching**: High-performance caching and message queuing
+- **Docker Containerization**: Production-ready container orchestration
+- **Nginx Reverse Proxy**: Professional-grade web server with rate limiting
 
-### 🎯 **Multi-Tier Collection Strategy**
-- **Tier 1: RSS Feeds** - Fast, reliable collection from structured feeds
-- **Tier 2: Modern Web Scraping** - JavaScript-enabled scraping with structured data extraction
-- **Tier 3: Legacy HTML Parsing** - Fallback for older sites with basic HTML parsing
+### **Performance Enhancements**
+- **Concurrent Operations**: Handle multiple users and operations simultaneously
+- **Database Locking**: Eliminated SQLite locking issues
+- **Connection Management**: Proper session handling and cleanup
+- **Task Queuing**: Asynchronous processing of heavy operations
+- **Health Monitoring**: Built-in health checks and monitoring
 
-### 🚀 **Advanced Capabilities**
-- **Asynchronous Processing** - High-performance concurrent collection
-- **Smart Content Cleaning** - AI-powered content extraction and normalization
-- **Intelligent Deduplication** - SHA256-based content fingerprinting
-- **Rate Limiting & Respect** - Per-domain rate limiting with robots.txt compliance
-- **Quality Scoring** - Automated content quality assessment
-- **Flexible Configuration** - YAML-based source configuration with validation
+## 🏗️ **Technology Stack**
 
-### 📊 **Data Management**
-- **SQLite Database** - Lightweight, embedded database for local deployments
-- **Structured Data Models** - Pydantic-based validation and serialization
-- **Export Capabilities** - JSON, CSV, and YAML export formats
-- **Health Monitoring** - Source health tracking and failure alerting
+### **Backend**
+- **FastAPI 2.0**: Modern, fast web framework with async support
+- **PostgreSQL 15**: Production database with connection pooling
+- **Redis 7**: Caching and message broker
+- **SQLAlchemy 2.0**: Async ORM with proper transaction handling
+- **Celery**: Background task processing and scheduling
 
-### 🛠️ **Developer Experience**
-- **Rich CLI Interface** - Beautiful command-line interface with progress indicators
-- **Virtual Environment Enforcement** - Automatic virtual environment detection
-- **Comprehensive Logging** - Structured logging with configurable levels
-- **Type Safety** - Full type hints and validation throughout
+### **Frontend**
+- **Jinja2 Templates**: Server-side rendering
+- **Tailwind CSS**: Modern, utility-first CSS framework
+- **HTMX**: Dynamic content updates without JavaScript
+- **Chart.js**: Interactive data visualization
 
-## 🚀 Quick Start
+### **Infrastructure**
+- **Docker & Docker Compose**: Container orchestration
+- **Nginx**: Reverse proxy with rate limiting and compression
+- **Uvicorn**: ASGI server for FastAPI
+- **Alembic**: Database migrations
 
-### Prerequisites
+## 📦 **Quick Start**
 
-- **Python 3.8+** (3.11+ recommended)
-- **Virtual environment** (required)
-
-### Installation
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/yourusername/ctiscraper.git
-   cd ctiscraper
-   ```
-
-2. **Automated setup (recommended):**
-   ```bash
-   python3 setup_env.py
-   source venv/bin/activate
-   ```
-
-3. **Manual setup:**
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   ```
-
-### Quick Usage
-
+### **Option 1: Production Stack (Docker)**
 ```bash
-# Initialize with default sources
-./threat-intel init
+# Start the complete production stack
+./start_production.sh
 
-# Collect from all active sources
-./threat-intel collect
-
-# View database statistics
-./threat-intel stats
-
-# Export collected data
-./threat-intel export --format json --output threat_data.json
+# Access the application
+open http://localhost
 ```
 
-## 📖 Usage Guide
-
-### Basic Commands
-
+### **Option 2: Development Environment**
 ```bash
-# Collection
-./threat-intel collect                    # Collect from all sources
-./threat-intel collect --source cisa     # Collect from specific source
-./threat-intel collect --dry-run         # Test collection without saving
+# Start local development environment
+./start_development.sh
 
-# Monitoring
-./threat-intel monitor --interval 3600   # Monitor every hour
-./threat-intel test                       # Test all source configurations
-
-# Data Management
-./threat-intel stats                      # Show database statistics
-./threat-intel export --format csv       # Export as CSV
-./threat-intel export --limit 100        # Limit export to 100 articles
-
-# Source Management
-./threat-intel sources list              # List all sources
-./threat-intel sources add <config>      # Add new source
-./threat-intel sources disable <name>    # Disable source
+# Access the application
+open http://localhost:8000
 ```
 
-### Auto-Activating Wrapper
-
-For convenience, use the auto-activating wrapper that handles virtual environment activation:
-
+### **Option 3: Manual Setup**
 ```bash
-./threat-intel.sh collect    # Automatically activates venv
-./threat-intel.sh monitor    # No manual activation needed
-./threat-intel.sh stats      # Works from any shell state
+# Install dependencies
+pip install -r requirements.txt
+
+# Start PostgreSQL and Redis
+brew services start postgresql@15
+brew services start redis
+
+# Create database
+createdb cti_scraper
+
+# Start the application
+python src/web/modern_main.py
 ```
 
-## ⚙️ Configuration
+## 🔧 **Configuration**
 
-### Environment Variables
+### **Environment Variables**
+Copy `config.production.env` to `.env` and modify as needed:
 
-Copy `.env.example` to `.env` and customize:
-
-```bash
-cp .env.example .env
-```
-
-Key settings:
 ```bash
 # Database
-DATABASE_URL=sqlite:///threat_intel.db
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/dbname
+POSTGRES_PASSWORD=your_password
 
-# HTTP Settings
-REQUEST_TIMEOUT=30
-RATE_LIMIT_PER_MINUTE=60
+# Redis
+REDIS_URL=redis://:password@localhost:6379/0
+REDIS_PASSWORD=your_redis_password
 
-# Content Processing
-MAX_CONTENT_LENGTH=100000
-QUALITY_THRESHOLD=0.3
-
-# Security (optional)
-VIRUSTOTAL_API_KEY=your-api-key
-SHODAN_API_KEY=your-api-key
+# Application
+ENVIRONMENT=production
+LOG_LEVEL=INFO
+SECRET_KEY=your-secret-key
 ```
 
-### Source Configuration
+### **Database Configuration**
+```bash
+# PostgreSQL connection settings
+DB_POOL_SIZE=20
+DB_MAX_OVERFLOW=30
+DB_POOL_PRE_PING=true
+DB_POOL_RECYCLE=3600
+```
 
-Sources are defined in `config/sources.yaml`:
+## 🗄️ **Database Schema**
 
+### **Core Tables**
+- **`sources`**: Threat intelligence sources and configuration
+- **`articles`**: Collected threat intelligence articles
+- **`source_checks`**: Source health and connectivity monitoring
+- **`content_hashes`**: Content deduplication
+- **`url_tracking`**: URL processing history
+
+### **Modern Features**
+- **Async Operations**: Non-blocking database operations
+- **Connection Pooling**: Efficient connection management
+- **Transaction Management**: Proper ACID compliance
+- **Migration Support**: Alembic for schema evolution
+
+## 🔄 **Background Tasks**
+
+### **Scheduled Tasks**
+- **Hourly**: Check all sources for new content
+- **15 Minutes**: Check Tier 1 (high-priority) sources
+- **Daily 2 AM**: Clean up old data
+- **Daily 6 AM**: Generate threat intelligence reports
+
+### **Task Queues**
+- **`source_checks`**: Source connectivity testing
+- **`priority_checks`**: High-priority source monitoring
+- **`collection`**: Content collection and processing
+- **`maintenance`**: System maintenance tasks
+- **`reports`**: Report generation
+
+## 📊 **API Endpoints**
+
+### **Core API**
+```bash
+# Health and monitoring
+GET /health                    # System health check
+GET /api/sources              # List all sources
+GET /api/articles             # List all articles
+
+# Source management
+POST /api/sources/{id}/toggle # Toggle source status
+POST /api/sources/{id}/test   # Test source connectivity
+GET /api/sources/{id}/stats   # Get source statistics
+
+# Article management
+GET /api/articles/{id}        # Get specific article
+```
+
+### **Web Interface**
+```bash
+# Main pages
+/                    # Dashboard
+/sources             # Source management
+/articles            # Article listing
+/articles/{id}       # Article detail
+```
+
+## 🐳 **Docker Services**
+
+### **Service Architecture**
 ```yaml
-cisa_advisories:
-  name: "CISA Security Advisories"
-  url: "https://www.cisa.gov/news-events/cybersecurity-advisories"
-  rss_url: "https://www.cisa.gov/cybersecurity-advisories/advisories.xml"
-  tier: 1
-  enabled: true
-  categories: ["government", "advisories"]
-  config:
-    rate_limit: 60
-    timeout: 30
-    max_articles: 50
+postgres:    # PostgreSQL database
+redis:       # Redis cache and message broker
+web:         # FastAPI web application
+worker:      # Celery worker for background tasks
+scheduler:   # Celery beat for scheduled tasks
+nginx:       # Reverse proxy and load balancer
 ```
 
-## 🏗️ Architecture
-
-### Component Overview
-
-```
-├── src/
-│   ├── cli/           # Command-line interface
-│   ├── core/          # Core scraping components
-│   │   ├── fetcher.py     # Orchestrates collection strategy
-│   │   ├── rss_parser.py  # RSS/Atom feed processing
-│   │   ├── modern_scraper.py  # Modern web scraping
-│   │   └── processor.py   # Content processing & deduplication
-│   ├── database/      # Database models and management
-│   ├── models/        # Pydantic data models
-│   └── utils/         # Utilities (HTTP, content cleaning)
-```
-
-### Data Flow
-
-1. **Source Loading** - YAML configuration validation and parsing
-2. **Content Collection** - Three-tier scraping strategy execution
-3. **Content Processing** - Cleaning, normalization, and quality scoring
-4. **Deduplication** - SHA256-based content fingerprinting
-5. **Storage** - SQLite database with structured models
-6. **Export** - Flexible output formats (JSON, CSV, YAML)
-
-### Three-Tier Strategy
-
-```mermaid
-graph TD
-    A[Source] --> B{Has RSS?}
-    B -->|Yes| C[Tier 1: RSS Parser]
-    B -->|No| D{Modern Site?}
-    D -->|Yes| E[Tier 2: Modern Scraper]
-    D -->|No| F[Tier 3: Legacy HTML Parser]
-    
-    C --> G[Content Processor]
-    E --> G
-    F --> G
-    
-    G --> H[Deduplication]
-    H --> I[Database Storage]
-```
-
-## 🔧 Development
-
-### Setup Development Environment
-
+### **Management Commands**
 ```bash
-# Clone and setup
-git clone https://github.com/yourusername/ctiscraper.git
-cd ctiscraper
-python3 setup_env.py
+# View logs
+docker-compose logs -f [service]
 
-# Activate virtual environment
-source venv/bin/activate
+# Restart service
+docker-compose restart [service]
 
-# Install development dependencies
-pip install -r requirements.txt
+# Stop all services
+docker-compose down
+
+# Rebuild and start
+docker-compose up --build -d
 ```
 
-### Code Quality
+## 📈 **Monitoring & Health**
 
-```bash
-# Format code
-black src/
+### **Health Checks**
+- **Database**: Connection and query performance
+- **Redis**: Cache and message broker status
+- **Web Service**: API responsiveness
+- **Background Workers**: Task processing status
 
-# Lint code
-flake8 src/
+### **Metrics**
+- **Source Health**: Success rates and response times
+- **Content Collection**: Articles per source and time
+- **System Performance**: Response times and throughput
+- **Error Rates**: Failed operations and exceptions
 
-# Type checking
-mypy src/
+## 🔒 **Security Features**
 
-# Security scanning
-bandit -r src/
-safety check
-```
+### **Built-in Security**
+- **Rate Limiting**: API and web request throttling
+- **CORS Protection**: Cross-origin request handling
+- **Input Validation**: Pydantic model validation
+- **SQL Injection Protection**: Parameterized queries
+- **XSS Protection**: Template escaping and sanitization
 
-### Testing
+### **Production Hardening**
+- **Environment Isolation**: Separate dev/prod configs
+- **Secret Management**: Environment variable configuration
+- **Access Control**: Database user permissions
+- **Network Security**: Container network isolation
 
+## 🚀 **Performance Features**
+
+### **Optimization**
+- **Connection Pooling**: Efficient database connections
+- **Async Processing**: Non-blocking I/O operations
+- **Caching**: Redis-based result caching
+- **Compression**: Gzip compression for responses
+- **Background Processing**: Heavy operations offloaded
+
+### **Scalability**
+- **Horizontal Scaling**: Multiple worker processes
+- **Load Balancing**: Nginx reverse proxy
+- **Queue Management**: Celery task distribution
+- **Database Sharding**: Ready for future expansion
+
+## 🧪 **Testing & Development**
+
+### **Development Tools**
 ```bash
 # Run tests
 pytest
 
-# With coverage
-pytest --cov=src --cov-report=html
+# Code formatting
+black src/
 
-# Test specific component
-pytest tests/test_rss_parser.py
+# Linting
+flake8 src/
+
+# Type checking
+mypy src/
 ```
 
-### Adding New Sources
-
-1. **Update `config/sources.yaml`:**
-   ```yaml
-   new_source:
-     name: "New Threat Source"
-     url: "https://example.com/threats"
-     rss_url: "https://example.com/feed.xml"  # if available
-     tier: 1
-     enabled: true
-     categories: ["private", "threat-intel"]
-   ```
-
-2. **Test the configuration:**
-   ```bash
-   ./threat-intel test --source new_source
-   ```
-
-3. **Collect data:**
-   ```bash
-   ./threat-intel collect --source new_source
-   ```
-
-## 📊 Database Schema
-
-### Core Tables
-
-- **`sources`** - Source configurations and metadata
-- **`articles`** - Collected threat intelligence articles
-- **`source_checks`** - Health monitoring and collection history
-- **`content_hashes`** - Deduplication tracking
-- **`url_tracking`** - URL collection tracking
-
-### Example Queries
-
-```sql
--- Get recent high-quality articles
-SELECT title, published_at, quality_score 
-FROM articles 
-WHERE quality_score > 0.7 
-ORDER BY published_at DESC 
-LIMIT 10;
-
--- Source performance summary
-SELECT s.name, COUNT(a.id) as article_count, AVG(a.quality_score) as avg_quality
-FROM sources s 
-LEFT JOIN articles a ON s.id = a.source_id 
-GROUP BY s.id, s.name;
-```
-
-## 🛡️ Security
-
-### Security Features
-
-- **No hardcoded credentials** - All sensitive data via environment variables
-- **Input validation** - Pydantic models validate all data
-- **Rate limiting** - Respectful scraping with configurable limits
-- **Content sanitization** - HTML cleaning and content normalization
-- **Virtual environment enforcement** - Prevents system package pollution
-
-### Security Scanning
-
+### **Local Development**
 ```bash
-# Scan for security vulnerabilities
-bandit -r src/
+# Start development environment
+./start_development.sh
 
-# Check for known vulnerable packages
-safety check
-
-# Validate configurations
-./threat-intel test --all
+# Hot reload enabled
+# Code changes automatically reload
 ```
 
-### Best Practices
+## 📚 **Documentation**
 
-1. **Use API keys** for authenticated sources when available
-2. **Rotate credentials** regularly
-3. **Monitor collection patterns** for anomalies
-4. **Keep dependencies updated** using pinned versions
-5. **Review source configurations** before deployment
+### **API Documentation**
+- **Interactive Docs**: Available at `/docs` (Swagger UI)
+- **ReDoc**: Alternative docs at `/redoc`
+- **OpenAPI Schema**: Machine-readable API specification
 
-## 🤝 Contributing
+### **Code Documentation**
+- **Type Hints**: Full Python type annotations
+- **Docstrings**: Comprehensive function documentation
+- **Examples**: Usage examples in docstrings
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+## 🤝 **Contributing**
 
-### Development Workflow
+### **Development Setup**
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests and documentation
+5. Submit a pull request
 
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
-3. **Make** your changes with tests
-4. **Run** quality checks (`black`, `flake8`, `mypy`, `pytest`)
-5. **Commit** your changes (`git commit -m 'Add amazing feature'`)
-6. **Push** to the branch (`git push origin feature/amazing-feature`)
-7. **Open** a Pull Request
+### **Code Standards**
+- **Python**: PEP 8 compliance
+- **Type Hints**: Required for all functions
+- **Documentation**: Docstrings for all public APIs
+- **Testing**: Unit tests for new features
 
-### Code Standards
-
-- **Python 3.8+** compatibility
-- **Type hints** for all functions
-- **Docstrings** for all public APIs
-- **Tests** for new functionality
-- **Black** code formatting
-- **Conventional commits** for commit messages
-
-## 📄 License
+## 📄 **License**
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🆘 Support
+## 🆘 **Support**
 
-- **Documentation:** [Full documentation](docs/)
-- **Issues:** [GitHub Issues](https://github.com/yourusername/ctiscraper/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/yourusername/ctiscraper/discussions)
-- **Security:** See [SECURITY.md](SECURITY.md) for security policy
+### **Common Issues**
+- **Database Connection**: Check PostgreSQL service status
+- **Redis Connection**: Verify Redis service is running
+- **Port Conflicts**: Ensure ports 8000, 5432, 6379 are available
+- **Permission Issues**: Check file permissions and ownership
 
-## 🙏 Acknowledgments
-
-- **Feed Sources:** Thanks to all the threat intelligence providers
-- **Libraries:** Built on excellent Python libraries (httpx, SQLAlchemy, Pydantic, Rich)
-- **Community:** Inspired by the cybersecurity and threat intelligence community
+### **Getting Help**
+- **Issues**: GitHub issue tracker
+- **Documentation**: This README and inline code docs
+- **Community**: GitHub discussions and discussions
 
 ---
 
-**⚡ Ready to aggregate threat intelligence? Get started with `./threat-intel init`!**
+## 🎯 **Next Steps**
+
+1. **Start the Production Stack**: `./start_production.sh`
+2. **Explore the API**: Visit `http://localhost/docs`
+3. **Monitor Health**: Check `http://localhost/health`
+4. **Configure Sources**: Add your threat intelligence sources
+5. **Customize Alerts**: Set up notification preferences
+
+**Welcome to the future of threat intelligence! 🚀**

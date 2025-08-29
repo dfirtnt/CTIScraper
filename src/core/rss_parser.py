@@ -7,10 +7,10 @@ import feedparser
 import logging
 from urllib.parse import urljoin
 
-from models.article import Article, ArticleCreate
-from models.source import Source
-from utils.http import HTTPClient
-from utils.content import DateExtractor, ContentCleaner, MetadataExtractor
+from src.models.article import Article, ArticleCreate
+from src.models.source import Source
+from src.utils.http import HTTPClient
+from src.utils.content import DateExtractor, ContentCleaner, MetadataExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -201,56 +201,113 @@ class RSSParser:
         
         # Special handling for Red Canary - avoid compressed content issues
         if 'redcanary.com' in url.lower():
-            logger.info(f"Red Canary URL detected, using RSS summary only: {url}")
-            if hasattr(entry, 'summary') and entry.summary:
-                summary_content = f"""Red Canary Article: {entry.title if hasattr(entry, 'title') else 'Unknown Title'}
-
-Summary: {entry.summary}
-
-Note: Full content extraction is disabled for Red Canary due to website compression issues.
-Please visit the original article for complete content: {url}
-"""
-                return ContentCleaner.clean_html(summary_content)
-            else:
-                return f"Red Canary article - please visit: {url}"
+            logger.info(f"Red Canary URL detected, skipping due to compression issues: {url}")
+            # Return None to indicate extraction failure - this article will be rejected
+            return None
         
-        # If feed content is insufficient, fetch from URL
+        # If feed content is insufficient, fetch from URL with retry strategies
         try:
-            response = await self.http_client.get(url)
-            response.raise_for_status()
+            response = None
+            for attempt in range(2):  # Try twice with different approaches
+                try:
+                    # First attempt: standard request
+                    # Second attempt: with additional headers to appear more like a browser
+                    extra_headers = {}
+                    if attempt == 1:
+                        extra_headers.update({
+                            'Referer': f"https://{url.split('/')[2]}/",
+                            'Sec-Fetch-User': '?1',
+                            'Sec-Ch-Ua': '"Google Chrome";v="120", "Chromium";v="120", "Not A(Brand";v="99"',
+                            'Sec-Ch-Ua-Mobile': '?0',
+                            'Sec-Ch-Ua-Platform': '"macOS"'
+                        })
+                        logger.info(f"Retry attempt {attempt + 1} with enhanced headers for {url}")
+                    
+                    response = await self.http_client.get(url, headers=extra_headers)
+                    response.raise_for_status()
+                    break  # Success, exit retry loop
+                    
+                except Exception as e:
+                    logger.warning(f"Attempt {attempt + 1} failed for {url}: {e}")
+                    if attempt == 1:  # Last attempt failed
+                        raise e
+                    # Wait before retry
+                    import asyncio
+                    await asyncio.sleep(1)
             
             # Use basic content extraction
             from bs4 import BeautifulSoup
             soup = BeautifulSoup(response.text, 'lxml')
             
-            # Try common content selectors
+            # Try comprehensive content selectors (prioritized by likelihood)
             content_selectors = [
-                'article',
-                '.content',
-                '.post-content',
-                '.entry-content',
-                '.blog-content',
-                'main',
-                '#content'
+                # Modern blog platforms
+                '.blog-post-content', '.post-body', '.article-body', '.entry-body',
+                # CrowdStrike specific
+                '.blog-content', '.post-wrapper', '.article-wrapper',
+                # Medium/modern platforms
+                'article', '[data-testid="storyContent"]', '.story-content',
+                # WordPress/common CMS
+                '.entry-content', '.post-content', '.content-area',
+                # Generic content containers
+                '.content', 'main', '#main-content', '#content',
+                # Fallback containers
+                '.container .content', '.page-content', '.site-content'
             ]
             
             for selector in content_selectors:
                 content_elem = soup.select_one(selector)
                 if content_elem:
                     extracted_content = str(content_elem)
-                    if len(ContentCleaner.html_to_text(extracted_content).strip()) > 100:
+                    clean_text = ContentCleaner.html_to_text(extracted_content).strip()
+                    
+                    # Enhanced content quality validation
+                    if self._is_quality_content(clean_text, url):
+                        logger.info(f"Successful content extraction using selector '{selector}' for {url}")
                         return ContentCleaner.clean_html(extracted_content)
             
             # Fallback: get body content
             body = soup.find('body')
             if body:
                 return ContentCleaner.clean_html(str(body))
-            
+                
         except Exception as e:
             logger.warning(f"Failed to fetch full content from {url}: {e}")
         
         # Return feed content even if short
         return ContentCleaner.clean_html(content) if content else None
+    
+    def _is_quality_content(self, text: str, url: str) -> bool:
+        """Validate if extracted content is high quality and not blocked/error content."""
+        if not text or len(text) < 100:
+            return False
+        
+        # Check for anti-bot/error messages
+        anti_bot_indicators = [
+            'access denied', 'blocked', 'bot detected', 'captcha',
+            'please enable javascript', 'javascript is required',
+            'cloudflare', 'security check', 'rate limit',
+            'temporarily unavailable', '403 forbidden', '404 not found'
+        ]
+        
+        text_lower = text.lower()
+        for indicator in anti_bot_indicators:
+            if indicator in text_lower:
+                logger.warning(f"Anti-bot content detected for {url}: {indicator}")
+                return False
+        
+        # Ensure sufficient content length and word count
+        words = text.split()
+        if len(words) < 50:  # Less than 50 words is probably not full content
+            return False
+        
+        # Check for reasonable content structure (paragraphs, sentences)
+        sentences = text.count('.') + text.count('!') + text.count('?')
+        if sentences < 3:  # Very few sentences suggests incomplete content
+            return False
+        
+        logger.debug(f"Quality content validated: {len(text)} chars, {len(words)} words, {sentences} sentences")
+        return True
     
     def _get_feed_content(self, entry: Any) -> Optional[str]:
         """Extract content from feed entry."""

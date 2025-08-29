@@ -6,8 +6,8 @@ from datetime import datetime, timedelta
 import logging
 
 from models.article import ArticleCreate
-from models.source import Source
-from utils.http import HTTPClient
+from src.models.source import Source
+from src.utils.http import HTTPClient
 from core.rss_parser import RSSParser
 from core.modern_scraper import ModernScraper, LegacyScraper
 

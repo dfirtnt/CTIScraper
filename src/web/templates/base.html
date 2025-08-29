@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CTI Scraper - Threat Intelligence Platform{% endblock %}</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+    
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- HTMX for dynamic interactions -->
+    <script src="https://unpkg.com/htmx.org@1.9.6"></script>
+    
+    <!-- Chart.js for visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Custom styles -->
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .quality-excellent { background-color: #10b981; }
+        .quality-good { background-color: #3b82f6; }
+        .quality-fair { background-color: #f59e0b; }
+        .quality-limited { background-color: #ef4444; }
+        .priority-high { background-color: #ef4444; }
+        .priority-medium { background-color: #f59e0b; }
+        .priority-low { background-color: #10b981; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Navigation -->
+    <nav class="gradient-bg text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-xl font-bold">🛡️ CTI Scraper</h1>
+                    </div>
+                    <div class="hidden md:block ml-10">
+                        <div class="flex items-baseline space-x-4">
+                            <a href="/" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors">
+                                Dashboard
+                            </a>
+                            <a href="/articles" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors">
+                                Articles
+                            </a>
+                            <a href="/analysis" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors">
+                                TTP Analysis
+                            </a>
+                            <a href="/sources" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors">
+                                Sources
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <div class="text-sm text-white opacity-75">
+                        Threat Intelligence Platform
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white mt-16">
+        <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+            <div class="text-center text-sm text-gray-300">
+                <p>&copy; 2025 CTI Scraper. Modern threat intelligence aggregation and analysis platform.</p>
+                <p class="mt-2">Built with FastAPI, Python, and modern web technologies.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script>
+        // Global utility functions
+        function formatDate(dateString) {
+            if (!dateString) return 'Unknown';
+            const date = new Date(dateString);
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        }
+
+        function truncateText(text, maxLength = 100) {
+            if (text.length <= maxLength) return text;
+            return text.substring(0, maxLength) + '...';
+        }
+
+        function getQualityColor(score) {
+            if (score >= 60) return 'quality-excellent';
+            if (score >= 45) return 'quality-good';
+            if (score >= 30) return 'quality-fair';
+            return 'quality-limited';
+        }
+
+        function getPriorityColor(priority) {
+            switch(priority.toLowerCase()) {
+                case 'high': return 'priority-high';
+                case 'medium': return 'priority-medium';
+                case 'low': return 'priority-low';
+                default: return 'bg-gray-500';
+            }
+        }
+
+        // Auto-refresh dashboard every 30 seconds
+        if (window.location.pathname === '/') {
+            setInterval(() => {
+                htmx.ajax('GET', '/', {target: 'body', swap: 'innerHTML'});
+            }, 30000);
+        }
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

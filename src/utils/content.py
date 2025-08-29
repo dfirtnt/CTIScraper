@@ -469,6 +469,14 @@ def validate_content(title: str, content: str, url: str) -> List[str]:
     if not content or not content.strip():
         issues.append("Missing or empty content")
     else:
+        # Check for garbage content patterns
+        if _is_garbage_content(content):
+            issues.append("Content appears to be garbage/compressed data")
+        
+        # Check for compression failure messages
+        if _has_compression_failure_indicators(content):
+            issues.append("Content indicates extraction failure")
+        
         text_content = ContentCleaner.html_to_text(content)
         if len(text_content.strip()) < 50:
             issues.append("Content too short")
@@ -479,3 +487,96 @@ def validate_content(title: str, content: str, url: str) -> List[str]:
         issues.append("Invalid URL format")
     
     return issues
+
+def _is_garbage_content(content: str) -> bool:
+    """
+    Detect if content is garbage/compressed data.
+    
+    Returns:
+        True if content appears to be garbage
+    """
+    if not content:
+        return False
+    
+    # Convert to lowercase for analysis
+    content_lower = content.lower()
+    
+    # Check for high ratio of problematic characters
+    problematic_chars = sum(1 for c in content if c in '[]{}|\\')
+    total_chars = len(content)
+    
+    if total_chars > 0:
+        problematic_ratio = problematic_chars / total_chars
+        if problematic_ratio > 0.08:  # More than 8% problematic characters
+            return True
+    
+    # Check for specific garbage patterns
+    if '`E9 UI=' in content or 'cwCz _9hvtYfL' in content:
+        return True
+    
+    # Check for consecutive problematic characters
+    consecutive_count = 0
+    max_consecutive = 0
+    for char in content:
+        if char in '[]{}|\\':
+            consecutive_count += 1
+            max_consecutive = max(max_consecutive, consecutive_count)
+        else:
+            consecutive_count = 0
+    
+    # Check final sequence
+    if consecutive_count >= 3:
+        max_consecutive = max(max_consecutive, consecutive_count)
+    
+    if max_consecutive >= 3:  # 3 or more consecutive problematic chars
+        return True
+    
+    # Check for binary-like patterns
+    binary_patterns = [
+        r'[^\w\s]{3,}',      # Multiple consecutive special chars
+    ]
+    
+    import re
+    for pattern in binary_patterns:
+        if re.search(pattern, content):
+            return True
+    
+    # Check for compression artifacts
+    compression_indicators = [
+        'compression issues',
+        'website compression',
+        'content extraction failed',
+        'failed due to website',
+        'compression failed',
+        'extraction disabled'
+    ]
+    
+    if any(indicator in content_lower for indicator in compression_indicators):
+        return True
+    
+    return False
+
+def _has_compression_failure_indicators(content: str) -> bool:
+    """
+    Check if content contains indicators of extraction failure.
+    
+    Returns:
+        True if content suggests extraction failed
+    """
+    if not content:
+        return False
+    
+    content_lower = content.lower()
+    
+    # Patterns that indicate extraction failure
+    failure_patterns = [
+        'content extraction failed',
+        'failed due to website compression',
+        'extraction is disabled',
+        'please visit the original article',
+        'compression issues',
+        'website compression issues',
+        'full content extraction is disabled'
+    ]
+    
+    return any(pattern in content_lower for pattern in failure_patterns)

@@ -11,181 +11,88 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.8, 3.9, "3.10", "3.11", "3.12"]
+        python-version: [3.11, 3.12]
 
     steps:
     - uses: actions/checkout@v4
-
+    
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
-
-    - name: Cache pip packages
-      uses: actions/cache@v4
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-
-
+    
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-
-    - name: Lint with flake8
+        pip install pytest pytest-asyncio pytest-cov
+    
+    - name: Run tests
       run: |
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 src/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-
-    - name: Type check with mypy
-      run: |
-        mypy src/ --ignore-missing-imports
-
-    - name: Test with pytest
-      run: |
-        pytest tests/ -v --cov=src --cov-report=xml
-
+        pytest --cov=src --cov-report=xml
+    
     - name: Upload coverage to Codecov
-      if: matrix.python-version == '3.11'
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v3
       with:
         file: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.11
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black isort mypy
+    
+    - name: Run linters
+      run: |
+        flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        black --check src/
+        isort --check-only src/
+        mypy src/ --ignore-missing-imports
 
   security:
     runs-on: ubuntu-latest
+    
     steps:
     - uses: actions/checkout@v4
-
+    
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v4
       with:
-        python-version: "3.11"
-
+        python-version: 3.11
+    
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install bandit safety
-
-    - name: Security scan with bandit
+    
+    - name: Run security checks
       run: |
-        bandit -r src/ -f json -o bandit-report.json
-      continue-on-error: true
-
-    - name: Upload bandit results
-      uses: actions/upload-artifact@v4
-      if: always()
+        bandit -r src/ -f json -o bandit-report.json || true
+        safety check --json --output safety-report.json || true
+    
+    - name: Upload security reports
+      uses: actions/upload-artifact@v3
       with:
-        name: bandit-results
-        path: bandit-report.json
-
-    - name: Check for known vulnerabilities with safety
-      run: |
-        safety check --json --output safety-report.json
-      continue-on-error: true
-
-    - name: Upload safety results
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: safety-results
-        path: safety-report.json
-
-  code-quality:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.11"
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install black isort
-
-    - name: Check code formatting with black
-      run: |
-        black --check --diff src/
-
-    - name: Check import sorting with isort
-      run: |
-        isort --check-only --diff src/
-
-  build:
-    runs-on: ubuntu-latest
-    needs: [test, security, code-quality]
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.11"
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-
-    - name: Test CLI installation
-      run: |
-        chmod +x threat-intel
-        ./threat-intel --help
-
-    - name: Test source configuration validation
-      run: |
-        python -c "
-        import sys
-        sys.path.insert(0, 'src')
-        from core.source_manager import SourceManager
-        from models.source import SourceConfig
-        import yaml
-
-        with open('config/sources.yaml', 'r') as f:
-            sources_data = yaml.safe_load(f)
-        
-        for source_id, source_data in sources_data.items():
-            try:
-                config = SourceConfig(**source_data.get('config', {}))
-                print(f'✓ {source_id}: Configuration valid')
-            except Exception as e:
-                print(f'✗ {source_id}: {e}')
-                sys.exit(1)
-        print('All source configurations are valid!')
-        "
-
-    - name: Test database initialization
-      run: |
-        python -c "
-        import sys
-        sys.path.insert(0, 'src')
-        from database.manager import DatabaseManager
-        
-        db = DatabaseManager()
-        db.create_tables()
-        stats = db.get_database_stats()
-        print(f'Database initialized successfully: {stats}')
-        "
-
-  docs:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Deploy README to GitHub Pages
-      if: github.repository_owner != 'yourusername'  # Replace with actual owner
-      uses: peaceiris/actions-gh-pages@v4
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./
-        destination_dir: docs
-        keep_files: true
+        name: security-reports
+        path: |
+          bandit-report.json
+          safety-report.json

@@ -9,10 +9,10 @@ import logging
 from bs4 import BeautifulSoup
 import extruct
 
-from models.article import ArticleCreate
-from models.source import Source
-from utils.http import HTTPClient, normalize_url, is_same_domain
-from utils.content import (
+from src.models.article import ArticleCreate
+from src.models.source import Source
+from src.utils.http import HTTPClient, normalize_url, is_same_domain
+from src.utils.content import (
     ContentCleaner, DateExtractor, MetadataExtractor, 
     QualityScorer, validate_content
 )
