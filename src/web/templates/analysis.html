@@ -19,8 +19,8 @@
     </div>
 
     <!-- Quality Overview -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <!-- Average Quality Score -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        <!-- Combined Quality Score -->
         <div class="bg-white rounded-lg shadow-sm p-6 card-hover">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
@@ -29,8 +29,38 @@
                     </div>
                 </div>
                 <div class="ml-4">
-                    <p class="text-sm font-medium text-gray-500">Average Quality</p>
-                    <p class="text-2xl font-bold text-gray-900">{{ "%.1f"|format(quality_stats.average_score) }}/75</p>
+                    <p class="text-sm font-medium text-gray-500">Combined Quality</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ "%.1f"|format(quality_stats.combined_average_score) }}/75</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- TTP Quality Score -->
+        <div class="bg-white rounded-lg shadow-sm p-6 card-hover">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
+                        <span class="text-white text-lg">🎯</span>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">TTP Quality</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ "%.1f"|format(quality_stats.ttp_average_score) }}/75</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- LLM Quality Score -->
+        <div class="bg-white rounded-lg shadow-sm p-6 card-hover">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
+                        <span class="text-white text-lg">🤖</span>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">LLM Quality</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ "%.1f"|format(quality_stats.llm_average_score) }}/75</p>
                 </div>
             </div>
         </div>
@@ -45,7 +75,7 @@
                 </div>
                 <div class="ml-4">
                     <p class="text-sm font-medium text-gray-500">Excellent</p>
-                    <p class="text-2xl font-bold text-gray-900">{{ quality_stats.distribution.Excellent }}</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ quality_stats.quality_distribution.Excellent }}</p>
                 </div>
             </div>
         </div>
@@ -59,12 +89,12 @@
                 </div>
                 <div class="ml-4">
                     <p class="text-sm font-medium text-gray-500">Good</p>
-                    <p class="text-2xl font-bold text-gray-900">{{ quality_stats.distribution.Good }}</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ quality_stats.quality_distribution.Good }}</p>
                 </div>
             </div>
         </div>
 
-        <div class="bg-white rounded-lg shadow-sm p-6 card-hover">
+                <div class="bg-white rounded-lg shadow-sm p-6 card-hover">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
                     <div class="w-8 h-8 bg-yellow-500 rounded-md flex items-center justify-center">
@@ -73,17 +103,24 @@
                 </div>
                 <div class="ml-4">
                     <p class="text-sm font-medium text-gray-500">Fair/Limited</p>
-                    <p class="text-2xl font-bold text-gray-900">{{ quality_stats.distribution.Fair + quality_stats.distribution.Limited }}</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ quality_stats.quality_distribution.Fair + quality_stats.quality_distribution.Limited }}</p>
                 </div>
             </div>
         </div>
-    </div>
 
     <!-- Quality Distribution Chart -->
     <div class="bg-white rounded-lg shadow-sm p-6">
         <h3 class="text-lg font-medium text-gray-900 mb-4">Quality Distribution</h3>
         <div class="h-64">
             <canvas id="qualityChart"></canvas>
+        </div>
+    </div>
+    
+    <!-- Tactical vs Strategic Distribution Chart -->
+    <div class="bg-white rounded-lg shadow-sm p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Tactical vs Strategic Distribution</h3>
+        <div class="h-64">
+            <canvas id="tacticalChart"></canvas>
         </div>
     </div>
 
@@ -120,25 +157,25 @@
                         <!-- Technique Summary -->
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
                             <div class="text-center p-2 bg-blue-50 rounded">
-                                <div class="text-lg font-bold text-blue-600">{{ analysis_item.analysis.total_techniques }}</div>
+                                <div class="text-lg font-bold text-blue-600">{{ analysis_item.ttp_analysis.total_techniques }}</div>
                                 <div class="text-xs text-blue-800">Techniques</div>
                             </div>
                             <div class="text-center p-2 bg-green-50 rounded">
-                                <div class="text-lg font-bold text-green-600">{{ "%.2f"|format(analysis_item.analysis.overall_confidence) }}</div>
+                                <div class="text-lg font-bold text-green-600">{{ "%.2f"|format(analysis_item.ttp_analysis.overall_confidence) }}</div>
                                 <div class="text-xs text-green-800">Confidence</div>
                             </div>
                             <div class="text-center p-2 bg-yellow-50 rounded">
-                                <div class="text-lg font-bold text-yellow-600">{{ analysis_item.analysis.hunting_priority }}</div>
+                                <div class="text-lg font-bold text-yellow-600">{{ analysis_item.ttp_analysis.hunting_priority }}</div>
                                 <div class="text-xs text-yellow-800">Priority</div>
                             </div>
                         </div>
 
                         <!-- Top Techniques -->
-                        {% if analysis_item.analysis.techniques_by_category %}
+                        {% if analysis_item.ttp_analysis.techniques_by_category %}
                         <div class="mb-3">
                             <p class="text-sm text-gray-600 mb-2">Top Techniques:</p>
                             <div class="flex flex-wrap gap-2">
-                                {% for category, techniques in analysis_item.analysis.techniques_by_category.items() %}
+                                {% for category, techniques in analysis_item.ttp_analysis.techniques_by_category.items() %}
                                     {% for technique in techniques[:3] %}
                                     <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                                         {{ technique.technique_name }}
@@ -214,16 +251,57 @@
             labels: ['Excellent (60+)', 'Good (45-59)', 'Fair (30-44)', 'Limited (<30)'],
             datasets: [{
                 data: [
-                    {{ quality_stats.distribution.Excellent }},
-                    {{ quality_stats.distribution.Good }},
-                    {{ quality_stats.distribution.Fair }},
-                    {{ quality_stats.distribution.Limited }}
+                    {{ quality_stats.quality_distribution.Excellent }},
+                    {{ quality_stats.quality_distribution.Good }},
+                    {{ quality_stats.quality_distribution.Fair }},
+                    {{ quality_stats.quality_distribution.Limited }}
                 ],
                 backgroundColor: [
                     '#10b981', // Green
                     '#3b82f6', // Blue
                     '#f59e0b', // Yellow
                     '#ef4444'  // Red
+                ],
+                borderWidth: 2,
+                borderColor: '#ffffff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((context.parsed / total) * 100).toFixed(1);
+                            return `${context.label}: ${context.parsed} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    // Tactical vs Strategic Distribution Chart
+    const tacticalCtx = document.getElementById('tacticalChart').getContext('2d');
+    const tacticalChart = new Chart(tacticalCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Tactical', 'Strategic', 'Hybrid'],
+            datasets: [{
+                data: [
+                    {{ quality_stats.tactical_distribution.Tactical }},
+                    {{ quality_stats.tactical_distribution.Strategic }},
+                    {{ quality_stats.tactical_distribution.Hybrid }}
+                ],
+                backgroundColor: [
+                    '#ef4444', // Red for Tactical
+                    '#3b82f6', // Blue for Strategic
+                    '#8b5cf6'  // Purple for Hybrid
                 ],
                 borderWidth: 2,
                 borderColor: '#ffffff'
@@ -256,7 +334,7 @@
     // Count techniques by category
     const categoryCounts = {};
     {% for analysis_item in analyses %}
-        {% for category, techniques in analysis_item.analysis.techniques_by_category.items() %}
+        {% for category, techniques in analysis_item.ttp_analysis.techniques_by_category.items() %}
             if (!categoryCounts['{{ category }}']) {
                 categoryCounts['{{ category }}'] = 0;
             }
