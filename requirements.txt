@@ -36,7 +36,7 @@ structlog==23.2.0
 prometheus-client==0.19.0
 
 # Security
-python-jose[cryptography]==3.3.0
+python-jose[cryptography]==3.4.0
 passlib[bcrypt]==1.7.4
 
 # Development and testing
