@@ -51,3 +51,9 @@ gunicorn==23.0.0
 certifi==2025.8.3
 urllib3==2.5.0
 requests==2.32.5
+
+# Critical security updates
+charset-normalizer==3.4.3
+idna==3.10
+packaging==25.0
+setuptools==80.9.0
