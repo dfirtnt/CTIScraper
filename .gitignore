@@ -340,3 +340,15 @@ id_ed25519.pub
 api_keys.txt
 tokens.txt
 secrets.txt
+
+# Development and temporary scripts
+check_*.py
+export_*.py
+fix_*.py
+cleanup_*.py
+update_*.py
+add_*.py
+debug_*.py
+temp_*.py
+test_*.py
+*_test.py
