@@ -57,3 +57,9 @@ charset-normalizer==3.4.3
 idna==3.10
 packaging==25.0
 setuptools==80.9.0
+
+# Additional security packages
+pycparser==2.22
+cffi==1.17.1
+pyasn1==0.6.1
+pyasn1-modules==0.4.2
