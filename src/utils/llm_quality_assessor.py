@@ -75,38 +75,28 @@ class LLMQualityAssessor:
             LLMQualityAssessment with comprehensive quality scores
         """
         try:
-            # For now, implement rule-based assessment that mimics LLM analysis
-            # This can be replaced with actual LLM calls later
-            
-            # Content Structure Assessment (0-25 points)
+            # Try to use an actual LLM if configured. Fallback to heuristics.
+            llm_enabled = self._is_llm_enabled()
+            if llm_enabled:
+                try:
+                    llm_result = self._call_llm_assessment(content, ttp_analysis)
+                    return llm_result
+                except Exception as _:
+                    # If LLM fails, continue to heuristic fallback
+                    pass
+
+            # Heuristic fallback implementation
             structure_score, structure_breakdown, structure_reasoning = self._assess_content_structure(content)
-            
-            # Technical Depth Assessment (0-25 points)
             technical_score, technical_breakdown, technical_reasoning = self._assess_technical_depth(content)
-            
-            # Intelligence Value Assessment (0-25 points)
             value_score, value_breakdown, value_reasoning = self._assess_intelligence_value(content, ttp_analysis)
-            
-            # Tactical vs Strategic Classification
             tactical_score, strategic_score, classification = self._assess_tactical_vs_strategic(content)
-            
-            # Calculate total score
             total_score = structure_score + technical_score + value_score
-            
-            # Determine quality level
             quality_level = self._determine_quality_level(total_score)
-            
-            # Generate recommendations
             recommendations = self._generate_recommendations(
-                structure_score, technical_score, value_score, 
-                tactical_score, strategic_score, ttp_analysis
+                structure_score, technical_score, value_score, tactical_score, strategic_score, ttp_analysis
             )
-            
-            # Determine hunting priority
-            hunting_priority = self._determine_hunting_priority(
-                total_score, tactical_score, ttp_analysis
-            )
-            
+            hunting_priority = self._determine_hunting_priority(total_score, tactical_score, ttp_analysis)
+
             return LLMQualityAssessment(
                 content_structure_score=structure_score,
                 structure_breakdown=structure_breakdown,
@@ -391,6 +381,133 @@ class LLMQualityAssessor:
             return "Medium"
         else:
             return "Low"
+
+    def _is_llm_enabled(self) -> bool:
+        """Check env toggles to decide if external LLM should be used."""
+        import os
+        return os.getenv("LLM_ASSESSOR_ENABLED", "false").lower() in {"1", "true", "yes"}
+
+    def _call_llm_assessment(self, content: str, ttp_analysis: Optional[Dict]) -> LLMQualityAssessment:
+        """Call the configured LLM to perform JSON-based assessment and map to dataclass."""
+        import asyncio
+        from src.utils.llm_client import LLMClient
+        from src.utils.fewshot_store import FewShotStore
+
+        # Build instructions and JSON schema expectation
+        system = (
+            "You are a cybersecurity analyst specializing in threat intelligence content quality assessment. "
+            "Score the input content using the provided rubric and return ONLY a compact JSON object."
+        )
+        rubric = {
+            "structure": {
+                "desc": "0-25. Formatting, headers, lists, code, tables, length.",
+            },
+            "technical": {
+                "desc": "0-25. Technical depth, procedures, configs, tooling.",
+            },
+            "value": {
+                "desc": "0-25. TTP coverage and actionable insights."
+            },
+            "tactical_vs_strategic": {
+                "desc": "Tactical 0-100, Strategic 0-100, classification."
+            },
+            "quality_level": {
+                "desc": "Excellent (>=60), Good (>=45), Fair (>=30), Limited (<30)."
+            },
+            "hunting_priority": {
+                "desc": "High if total>=60 and tactical>=70; Medium if total>=45 and tactical>=50; else Low."
+            }
+        }
+        schema_hint = {
+            "type": "object",
+            "properties": {
+                "content_structure_score": {"type": "integer"},
+                "structure_breakdown": {"type": "object"},
+                "structure_reasoning": {"type": "string"},
+                "technical_depth_score": {"type": "integer"},
+                "technical_breakdown": {"type": "object"},
+                "technical_reasoning": {"type": "string"},
+                "intelligence_value_score": {"type": "integer"},
+                "value_breakdown": {"type": "object"},
+                "value_reasoning": {"type": "string"},
+                "tactical_score": {"type": "integer"},
+                "strategic_score": {"type": "integer"},
+                "classification": {"type": "string"},
+                "total_quality_score": {"type": "integer"},
+                "quality_level": {"type": "string"},
+                "recommendations": {"type": "array", "items": {"type": "string"}},
+                "hunting_priority": {"type": "string"},
+            },
+            "required": [
+                "content_structure_score","technical_depth_score","intelligence_value_score",
+                "tactical_score","strategic_score","classification","total_quality_score",
+                "quality_level","recommendations","hunting_priority"
+            ]
+        }
+
+        ttp_json = ttp_analysis or {}
+        fewshot_context = FewShotStore().as_prompt_context(limit=5)
+        user_prompt = (
+            "Rubric (JSON):\n" + json.dumps(rubric) +
+            "\n\nIf available, MITRE/TTP context (JSON):\n" + json.dumps(ttp_json) +
+            ("\n\nFew-shot examples:\n" + fewshot_context if fewshot_context else "") +
+            "\n\nContent to assess:\n" + content +
+            "\n\nReturn ONLY JSON conforming to this schema (no prose):\n" + json.dumps(schema_hint)
+        )
+
+        client = LLMClient()
+
+        async def _run() -> str:
+            messages = [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_prompt},
+            ]
+            return await client.chat(messages, temperature=0.2, max_tokens=800)
+
+        raw = asyncio.get_event_loop().run_until_complete(_run())
+        try:
+            data = json.loads(raw)
+        except Exception as exc:
+            raise RuntimeError(f"LLM did not return valid JSON: {raw}") from exc
+
+        # Basic normalization and bounds checking
+        def clamp(v: int, lo: int, hi: int) -> int:
+            try:
+                iv = int(v)
+            except Exception:
+                iv = 0
+            return max(lo, min(iv, hi))
+
+        structure_score = clamp(data.get("content_structure_score", 0), 0, 25)
+        technical_score = clamp(data.get("technical_depth_score", 0), 0, 25)
+        value_score = clamp(data.get("intelligence_value_score", 0), 0, 25)
+        total_score = clamp(data.get("total_quality_score", structure_score + technical_score + value_score), 0, 75)
+
+        quality_level = self._determine_quality_level(total_score)
+        tactical_score = clamp(data.get("tactical_score", 0), 0, 100)
+        strategic_score = clamp(data.get("strategic_score", 0), 0, 100)
+        classification = data.get("classification", "Hybrid")
+        recommendations = data.get("recommendations", []) or []
+        hunting_priority = self._determine_hunting_priority(total_score, tactical_score, ttp_analysis)
+
+        return LLMQualityAssessment(
+            content_structure_score=structure_score,
+            structure_breakdown=data.get("structure_breakdown", {}),
+            structure_reasoning=str(data.get("structure_reasoning", "")),
+            technical_depth_score=technical_score,
+            technical_breakdown=data.get("technical_breakdown", {}),
+            technical_reasoning=str(data.get("technical_reasoning", "")),
+            intelligence_value_score=value_score,
+            value_breakdown=data.get("value_breakdown", {}),
+            value_reasoning=str(data.get("value_reasoning", "")),
+            tactical_score=tactical_score,
+            strategic_score=strategic_score,
+            classification=classification,
+            total_quality_score=total_score,
+            quality_level=quality_level,
+            recommendations=[str(r) for r in recommendations][:10],
+            hunting_priority=hunting_priority,
+        )
     
     def _create_default_assessment(self) -> LLMQualityAssessment:
         """Create a default assessment when analysis fails."""
