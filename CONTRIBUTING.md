@@ -2,203 +2,227 @@
 
 Thank you for your interest in contributing to CTI Scraper! This document provides guidelines and information for contributors.
 
-## 🚀 Getting Started
+## Table of Contents
+
+- [Code of Conduct](#code-of-conduct)
+- [Getting Started](#getting-started)
+- [Development Setup](#development-setup)
+- [Code Style](#code-style)
+- [Testing](#testing)
+- [Pull Request Process](#pull-request-process)
+- [Reporting Bugs](#reporting-bugs)
+- [Feature Requests](#feature-requests)
+- [Security Issues](#security-issues)
+
+## Code of Conduct
+
+This project and everyone participating in it is governed by our Code of Conduct. By participating, you are expected to uphold this code.
+
+## Getting Started
 
 ### Prerequisites
-- Python 3.11+
-- Docker and Docker Compose
+
+- Python 3.9+
+- PostgreSQL 15+
+- Redis 7+
 - Git
 
-### Development Setup
-1. Fork the repository
-2. Clone your fork: `git clone https://github.com/yourusername/ctiscraper.git`
-3. Create a virtual environment: `python -m venv venv`
-4. Activate it: `source venv/bin/activate` (Linux/Mac) or `venv\Scripts\activate` (Windows)
-5. Install dependencies: `pip install -r requirements.txt`
-6. Copy environment: `cp env.example .env`
-7. Start services: `docker-compose up -d`
+### Fork and Clone
 
-## 🔧 Development Workflow
+1. Fork the repository on GitHub
+2. Clone your fork locally:
+   ```bash
+   git clone https://github.com/your-username/CTIScraper.git
+   cd CTIScraper
+   ```
+3. Add the upstream repository:
+   ```bash
+   git remote add upstream https://github.com/original-owner/CTIScraper.git
+   ```
+
+## Development Setup
+
+### 1. Environment Setup
+
+```bash
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+pip install -r requirements-test.txt
+
+# Copy environment template
+cp env.example .env
+# Edit .env with your local settings
+```
+
+### 2. Database Setup
+
+```bash
+# Start PostgreSQL and Redis
+brew services start postgresql@15  # macOS
+brew services start redis
+
+# Create database
+createdb cti_scraper_test
+```
+
+### 3. Run Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run specific test categories
+pytest tests/unit/          # Unit tests only
+pytest tests/integration/   # Integration tests only
+pytest tests/api/          # API tests only
+
+# Run with coverage
+pytest --cov=src --cov-report=html
+```
+
+## Code Style
+
+We follow PEP 8 with some modifications:
+
+### Python Code Style
+
+- **Line length**: 88 characters (Black default)
+- **Import order**: Use `isort` for consistent import ordering
+- **Type hints**: Required for all public functions and methods
+- **Docstrings**: Use Google-style docstrings
+
+### Code Formatting
+
+We use automated tools for code formatting:
+
+```bash
+# Install formatting tools
+pip install black isort mypy flake8
+
+# Format code
+black src/
+isort src/
+
+# Check types
+mypy src/
+
+# Lint code
+flake8 src/
+```
+
+### Pre-commit Hooks
+
+Install pre-commit hooks for automatic formatting:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+## Testing
+
+### Writing Tests
+
+- Write tests for all new functionality
+- Use descriptive test names
+- Group related tests in classes
+- Use fixtures for common setup
+- Mock external dependencies
+
+### Test Structure
+
+```python
+import pytest
+from src.core.models import Article
+
+class TestArticleModel:
+    """Test cases for Article model."""
+    
+    def test_article_creation(self):
+        """Test article creation with valid data."""
+        article = Article(
+            title="Test Article",
+            url="https://example.com/test",
+            content="Test content"
+        )
+        assert article.title == "Test Article"
+        assert article.url == "https://example.com/test"
+    
+    def test_article_validation(self):
+        """Test article validation with invalid data."""
+        with pytest.raises(ValueError):
+            Article(title="", url="invalid-url")
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run tests with verbose output
+pytest -v
+
+# Run tests and generate coverage report
+pytest --cov=src --cov-report=html
+
+# Run specific test file
+pytest tests/test_models.py
+
+# Run tests matching pattern
+pytest -k "test_article"
+```
+
+## Pull Request Process
 
 ### 1. Create a Feature Branch
+
 ```bash
 git checkout -b feature/your-feature-name
 ```
 
 ### 2. Make Your Changes
-- Follow the coding standards below
+
+- Write clear, descriptive commit messages
+- Follow the existing code style
 - Add tests for new functionality
 - Update documentation as needed
 
-### 3. Test Your Changes
-```bash
-# Run tests
-pytest
+### 3. Commit Your Changes
 
-# Run linting
-flake8 src/
-black --check src/
-isort --check-only src/
-mypy src/
-
-# Run security checks
-bandit -r src/
-safety check
-```
-
-### 4. Commit Your Changes
 ```bash
 git add .
 git commit -m "feat: add new feature description"
 ```
 
-### 5. Push and Create PR
+### 4. Push to Your Fork
+
 ```bash
 git push origin feature/your-feature-name
-# Create Pull Request on GitHub
 ```
 
-## 📝 Coding Standards
+### 5. Create a Pull Request
 
-### Python Code Style
-- Follow [PEP 8](https://pep8.org/) guidelines
-- Use [Black](https://black.readthedocs.io/) for code formatting
-- Use [isort](https://pycqa.github.io/isort/) for import sorting
-- Maximum line length: 88 characters (Black default)
+1. Go to your fork on GitHub
+2. Click "New Pull Request"
+3. Select your feature branch
+4. Fill out the PR template
+5. Submit the PR
 
-### Type Hints
-- Use type hints for all function parameters and return values
-- Use `Optional[T]` for nullable values
-- Use `Union[T1, T2]` for multiple types
-- Use `List[T]`, `Dict[K, V]`, etc. for collections
+### Pull Request Guidelines
 
-### Documentation
-- Use Google-style docstrings for all public functions
-- Include examples in docstrings
-- Update README.md for user-facing changes
-- Add inline comments for complex logic
+- **Title**: Clear, descriptive title
+- **Description**: Explain what the PR does and why
+- **Tests**: Ensure all tests pass
+- **Documentation**: Update docs if needed
+- **Breaking changes**: Clearly mark breaking changes
 
-### Example
-```python
-def process_articles(articles: List[Article], limit: Optional[int] = None) -> Dict[str, int]:
-    """
-    Process a list of articles and return statistics.
-    
-    Args:
-        articles: List of articles to process
-        limit: Maximum number of articles to process (None for all)
-    
-    Returns:
-        Dictionary containing processing statistics
-        
-    Example:
-        >>> articles = [Article(id=1, title="Test")]
-        >>> stats = process_articles(articles, limit=10)
-        >>> print(stats)
-        {'processed': 1, 'errors': 0}
-    """
-    # Implementation here
-    pass
-```
+### PR Template
 
-## 🧪 Testing
-
-### Test Structure
-- Tests go in `tests/` directory
-- Test files should be named `test_*.py`
-- Use descriptive test function names
-- Group related tests in classes
-
-### Test Examples
-```python
-import pytest
-from src.core.rss_parser import RSSParser
-
-class TestRSSParser:
-    """Test RSS parser functionality."""
-    
-    @pytest.fixture
-    def parser(self):
-        """Create RSS parser instance for testing."""
-        return RSSParser()
-    
-    def test_parse_feed_success(self, parser):
-        """Test successful RSS feed parsing."""
-        # Test implementation
-        pass
-    
-    def test_parse_feed_empty(self, parser):
-        """Test parsing empty RSS feed."""
-        # Test implementation
-        pass
-```
-
-### Running Tests
-```bash
-# Run all tests
-pytest
-
-# Run specific test file
-pytest tests/test_rss_parser.py
-
-# Run with coverage
-pytest --cov=src --cov-report=html
-
-# Run specific test
-pytest tests/test_rss_parser.py::TestRSSParser::test_parse_feed_success
-```
-
-## 🔒 Security
-
-### Before Submitting
-- Ensure no hardcoded credentials
-- Use environment variables for configuration
-- Validate all user inputs
-- Follow OWASP security guidelines
-
-### Security Checklist
-- [ ] No secrets in code
-- [ ] Input validation implemented
-- [ ] SQL injection prevention
-- [ ] XSS protection
-- [ ] Rate limiting configured
-- [ ] CORS properly configured
-
-## 📚 Documentation
-
-### Code Documentation
-- All public functions must have docstrings
-- Include parameter types and return types
-- Provide usage examples
-- Document exceptions that may be raised
-
-### User Documentation
-- Update README.md for new features
-- Add configuration examples
-- Include troubleshooting guides
-- Keep installation instructions current
-
-## 🚫 What Not to Do
-
-- Don't commit large binary files
-- Don't commit environment files (.env)
-- Don't commit database files
-- Don't commit temporary files
-- Don't commit secrets or credentials
-- Don't break existing functionality without discussion
-
-## 🤝 Pull Request Guidelines
-
-### PR Title Format
-- `feat:` for new features
-- `fix:` for bug fixes
-- `docs:` for documentation changes
-- `style:` for formatting changes
-- `refactor:` for code refactoring
-- `test:` for adding tests
-- `chore:` for maintenance tasks
-
-### PR Description Template
 ```markdown
 ## Description
 Brief description of changes
@@ -210,119 +234,125 @@ Brief description of changes
 - [ ] Documentation update
 
 ## Testing
-- [ ] Tests pass locally
-- [ ] Added new tests
-- [ ] Updated existing tests
+- [ ] Unit tests pass
+- [ ] Integration tests pass
+- [ ] Manual testing completed
 
 ## Checklist
 - [ ] Code follows style guidelines
 - [ ] Self-review completed
 - [ ] Documentation updated
-- [ ] No breaking changes
+- [ ] No breaking changes (or documented)
 ```
 
-## 🐛 Bug Reports
+## Reporting Bugs
 
 ### Before Reporting
+
 1. Check existing issues
-2. Search documentation
-3. Try to reproduce the issue
-4. Check if it's a configuration issue
+2. Try the latest version
+3. Reproduce the issue
 
 ### Bug Report Template
+
 ```markdown
-## Bug Description
-Clear description of the issue
+**Describe the bug**
+Clear description of what the bug is.
 
-## Steps to Reproduce
-1. Step 1
-2. Step 2
-3. Step 3
+**To Reproduce**
+Steps to reproduce the behavior:
+1. Go to '...'
+2. Click on '....'
+3. Scroll down to '....'
+4. See error
 
-## Expected Behavior
-What should happen
+**Expected behavior**
+Clear description of what you expected to happen.
 
-## Actual Behavior
-What actually happens
+**Environment:**
+- OS: [e.g. macOS 14.0]
+- Python: [e.g. 3.11.0]
+- CTI Scraper: [e.g. 2.0.0]
 
-## Environment
-- OS: [e.g., Ubuntu 20.04]
-- Python: [e.g., 3.11.0]
-- CTI Scraper: [e.g., 1.0.0]
-
-## Additional Information
-Logs, screenshots, etc.
+**Additional context**
+Add any other context about the problem here.
 ```
 
-## 💡 Feature Requests
+## Feature Requests
 
 ### Before Requesting
-1. Check if feature already exists
-2. Search existing issues
-3. Consider if it fits project scope
-4. Think about implementation approach
+
+1. Check if the feature already exists
+2. Consider if it fits the project scope
+3. Think about implementation details
 
 ### Feature Request Template
+
 ```markdown
-## Feature Description
-Clear description of the feature
+**Is your feature request related to a problem?**
+Clear description of the problem.
 
-## Use Case
-Why this feature is needed
+**Describe the solution you'd like**
+Clear description of what you want to happen.
 
-## Proposed Implementation
-How you think it could be implemented
+**Describe alternatives you've considered**
+Clear description of any alternative solutions.
 
-## Alternatives Considered
-Other approaches you considered
-
-## Additional Context
-Any other relevant information
+**Additional context**
+Add any other context or screenshots.
 ```
 
-## 🏷️ Release Process
+## Security Issues
+
+**Do not report security issues through public GitHub issues.**
+
+Please report security vulnerabilities via email to `security@ctiscraper.com`. See our [Security Policy](.github/SECURITY.md) for more details.
+
+## Documentation
+
+### Code Documentation
+
+- Use Google-style docstrings
+- Include type hints
+- Document complex algorithms
+- Provide usage examples
+
+### API Documentation
+
+- Document all endpoints
+- Include request/response examples
+- Document error codes
+- Keep docs up to date
+
+## Release Process
 
 ### Versioning
-We use [Semantic Versioning](https://semver.org/):
-- `MAJOR.MINOR.PATCH`
-- `MAJOR`: Breaking changes
-- `MINOR`: New features, backward compatible
-- `PATCH`: Bug fixes, backward compatible
+
+We follow [Semantic Versioning](https://semver.org/):
+
+- **Major**: Breaking changes
+- **Minor**: New features, backward compatible
+- **Patch**: Bug fixes, backward compatible
 
 ### Release Checklist
+
 - [ ] All tests pass
 - [ ] Documentation updated
 - [ ] Changelog updated
 - [ ] Version bumped
 - [ ] Release notes written
-- [ ] Security review completed
 
-## 📞 Getting Help
+## Getting Help
 
-### Communication Channels
-- **GitHub Issues**: For bugs and feature requests
-- **GitHub Discussions**: For questions and discussions
-- **Pull Requests**: For code contributions
+- **Issues**: GitHub issue tracker
+- **Discussions**: GitHub discussions
+- **Documentation**: Project README and docs
+- **Email**: For security issues only
 
-### Code Review Process
-1. Automated checks must pass
-2. At least one maintainer review
-3. All feedback addressed
-4. Tests pass after changes
-5. Documentation updated
+## Acknowledgments
 
-## 🎉 Recognition
-
-Contributors will be:
-- Listed in the README
-- Mentioned in release notes
-- Credited in documentation
-- Invited to join the project
-
-## 📄 License
-
-By contributing, you agree that your contributions will be licensed under the MIT License.
+Thank you to all contributors who have helped make CTI Scraper better! Your contributions are greatly appreciated.
 
 ---
 
-Thank you for contributing to CTI Scraper! 🚀
+**Note**: This contributing guide is a living document. Please suggest improvements through issues or pull requests.

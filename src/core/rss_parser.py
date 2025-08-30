@@ -100,6 +100,22 @@ class RSSParser:
             tags = self._extract_tags(entry)
             summary = self._extract_summary(entry, content)
             
+            # Build article metadata
+            metadata = {
+                'feed_entry': {
+                    'id': getattr(entry, 'id', ''),
+                    'link': getattr(entry, 'link', ''),
+                    'published': getattr(entry, 'published', ''),
+                    'updated': getattr(entry, 'updated', ''),
+                },
+                'extraction_method': 'rss'
+            }
+            
+            # Calculate quality score
+            from src.utils.content import QualityScorer
+            quality_score = QualityScorer.score_article(title, content, metadata)
+            metadata['quality_score'] = quality_score
+            
             # Build article
             article = ArticleCreate(
                 source_id=source.id,
@@ -110,15 +126,7 @@ class RSSParser:
                 tags=tags,
                 summary=summary,
                 content=content,
-                metadata={
-                    'feed_entry': {
-                        'id': getattr(entry, 'id', ''),
-                        'link': getattr(entry, 'link', ''),
-                        'published': getattr(entry, 'published', ''),
-                        'updated': getattr(entry, 'updated', ''),
-                    },
-                    'extraction_method': 'rss'
-                }
+                metadata=metadata
             )
             
             return article
@@ -131,6 +139,9 @@ class RSSParser:
         """Extract title from RSS entry."""
         title = getattr(entry, 'title', '')
         if title:
+            # Decode HTML entities (like &rsquo;)
+            import html
+            title = html.unescape(title)
             return ContentCleaner.normalize_whitespace(title)
         return None
     
@@ -195,8 +206,8 @@ class RSSParser:
         # Try to get full content from feed first
         content = self._get_feed_content(entry)
         
-        if content and len(ContentCleaner.html_to_text(content).strip()) > 200:
-            # We have substantial content from the feed
+        if content and len(ContentCleaner.html_to_text(content).strip()) > 1000:
+            # We have substantial content from the feed (at least 1000 chars)
             return ContentCleaner.clean_html(content)
         
         # Special handling for Red Canary - avoid compressed content issues
@@ -241,10 +252,13 @@ class RSSParser:
             
             # Try comprehensive content selectors (prioritized by likelihood)
             content_selectors = [
+                # CrowdStrike specific (prioritized)
+                '.blog-post-content', '.blog-content', '.post-content', '.article-content',
+                '.blog-post-body', '.post-body', '.article-body',
+                # Unit 42 specific
+                '.blog-post-content', '.post-content', '.entry-content',
                 # Modern blog platforms
                 '.blog-post-content', '.post-body', '.article-body', '.entry-body',
-                # CrowdStrike specific
-                '.blog-content', '.post-wrapper', '.article-wrapper',
                 # Medium/modern platforms
                 'article', '[data-testid="storyContent"]', '.story-content',
                 # WordPress/common CMS
@@ -264,7 +278,13 @@ class RSSParser:
                     # Enhanced content quality validation
                     if self._is_quality_content(clean_text, url):
                         logger.info(f"Successful content extraction using selector '{selector}' for {url}")
-                        return ContentCleaner.clean_html(extracted_content)
+                        cleaned_content = ContentCleaner.clean_html(extracted_content)
+                        
+                        # Special cleaning for CrowdStrike articles
+                        if 'crowdstrike.com' in url.lower():
+                            cleaned_content = self._clean_crowdstrike_content(cleaned_content)
+                        
+                        return cleaned_content
             
             # Fallback: get body content
             body = soup.find('body')
@@ -275,7 +295,13 @@ class RSSParser:
             logger.warning(f"Failed to fetch full content from {url}: {e}")
         
         # Return feed content even if short
-        return ContentCleaner.clean_html(content) if content else None
+        if content:
+            cleaned_content = ContentCleaner.clean_html(content)
+            # Special cleaning for CrowdStrike articles
+            if 'crowdstrike.com' in url.lower():
+                cleaned_content = self._clean_crowdstrike_content(cleaned_content)
+            return cleaned_content
+        return None
     
     def _is_quality_content(self, text: str, url: str) -> bool:
         """Validate if extracted content is high quality and not blocked/error content."""
@@ -389,6 +415,67 @@ class RSSParser:
             return ContentCleaner.extract_summary(content)
         
         return None
+    
+    def _clean_crowdstrike_content(self, content: str) -> str:
+        """Clean CrowdStrike article content by removing navigation and footer elements."""
+        if not content:
+            return content
+        
+        lines = content.split('\n')
+        cleaned_lines = []
+        
+        # Skip navigation elements at the beginning
+        skip_patterns = [
+            'BLOG Featured',
+            'Recent CrowdStrike',
+            'CrowdStrike Named a Leader',
+            'CrowdStrike to Acquire',
+            'MURKY PANDA',
+            'Recent'
+        ]
+        
+        # Stop when we hit footer elements
+        footer_patterns = [
+            'Sign Up',
+            'See CrowdStrike Falcon',
+            'See Demo',
+            'Copyright',
+            'Privacy',
+            'Contact Us',
+            '1.888.512.8906',
+            'Accessibility'
+        ]
+        
+        in_content = False
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Check if we've found the start of actual content
+            if any(keyword in line.lower() for keyword in ['machine learning', 'data splitting', 'evaluation', 'model', 'training', 'validation', 'approach', 'method']):
+                in_content = True
+            
+            # Skip navigation elements at the beginning
+            if not in_content and any(pattern in line for pattern in skip_patterns):
+                continue
+            
+            # Stop when we hit footer elements
+            if any(pattern in line for pattern in footer_patterns):
+                break
+            
+            if in_content or len(cleaned_lines) > 0:
+                cleaned_lines.append(line)
+        
+        # Join the cleaned content
+        cleaned_content = '\n\n'.join(cleaned_lines)
+        
+        # Ensure we have substantial content
+        if len(cleaned_content.strip()) < 100:
+            # If cleaning was too aggressive, return original content
+            return content
+        
+        return cleaned_content
 
 
 class FeedValidator:

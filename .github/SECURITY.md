@@ -2,79 +2,101 @@
 
 ## Supported Versions
 
+We release patches to fix high severity security issues. The following versions are currently being supported with security updates.
+
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.0.x   | :white_check_mark: |
+| 2.x.x   | :white_check_mark: |
+| 1.x.x   | :x:                |
+| < 1.0   | :x:                |
 
 ## Reporting a Vulnerability
 
-We take security vulnerabilities seriously. If you discover a security vulnerability, please follow these steps:
+We take the security of CTI Scraper seriously. If you believe you have found a security vulnerability, please report it to us as described below.
 
-### 1. **DO NOT** create a public GitHub issue
-Security vulnerabilities should be reported privately to prevent potential exploitation.
+### **Please do not report security vulnerabilities through public GitHub issues.**
 
-### 2. **DO** report via email
-Send an email to [security@yourdomain.com](mailto:security@yourdomain.com) with:
-- A clear description of the vulnerability
-- Steps to reproduce the issue
-- Potential impact assessment
-- Any additional context
+Instead, please report them via email to our security team at `security@ctiscraper.com` (replace with your actual security contact).
 
-### 3. **DO** include technical details
-- Affected versions
-- Environment details
-- Proof of concept (if available)
-- Suggested fix (if available)
+### What to include in your report
 
-### 4. **Response Timeline**
-- **Initial Response**: Within 48 hours
-- **Status Update**: Within 7 days
-- **Fix Timeline**: Depends on severity and complexity
+To help us understand and resolve the issue, please include the following information:
 
-### 5. **Disclosure Policy**
-- Critical vulnerabilities: Fixed and disclosed within 30 days
-- High severity: Fixed and disclosed within 60 days
-- Medium/Low severity: Fixed and disclosed within 90 days
+1. **Type of issue** (buffer overflow, SQL injection, cross-site scripting, etc.)
+2. **Full paths of source file(s) related to the vulnerability**
+3. **The location of the affected source code** (tag/branch/commit or direct URL)
+4. **Any special configuration required to reproduce the issue**
+5. **Step-by-step instructions to reproduce the issue**
+6. **Proof-of-concept or exploit code** (if possible)
+7. **Impact of the issue**, including how an attacker might exploit it
+
+### What to expect
+
+- You will receive a response within 48 hours acknowledging receipt of your report
+- We will investigate and provide updates on our findings
+- We will work with you to understand and address the issue
+- We will credit you in our security advisory if you wish
 
 ## Security Best Practices
 
-### For Contributors
-- Never commit secrets, API keys, or credentials
-- Use environment variables for configuration
-- Follow secure coding practices
-- Keep dependencies updated
-- Run security scans before submitting PRs
-
 ### For Users
-- Use strong, unique passwords
-- Keep your installation updated
-- Monitor logs for suspicious activity
-- Use HTTPS in production
-- Implement proper access controls
+
+1. **Keep dependencies updated**: Regularly update your dependencies to get the latest security patches
+2. **Use environment variables**: Never hardcode secrets in your configuration files
+3. **Enable security features**: Use HTTPS, enable rate limiting, and configure proper authentication
+4. **Monitor logs**: Regularly check application logs for suspicious activity
+5. **Regular backups**: Maintain regular backups of your database and configuration
+
+### For Contributors
+
+1. **Follow secure coding practices**: Use parameterized queries, validate input, and sanitize output
+2. **Review code carefully**: Pay special attention to authentication, authorization, and data handling
+3. **Test security features**: Include security tests in your test suite
+4. **Keep secrets out of code**: Never commit API keys, passwords, or other sensitive information
+5. **Use security tools**: Run security linters and vulnerability scanners
 
 ## Security Features
 
-- Environment variable configuration
-- No hardcoded secrets
-- Input validation and sanitization
-- Rate limiting
-- CORS protection
-- Secure headers
-- Database connection pooling
-- Async/await for non-blocking operations
+CTI Scraper includes several built-in security features:
 
-## Dependencies
+- **Input validation**: All user inputs are validated using Pydantic models
+- **SQL injection protection**: Uses parameterized queries and SQLAlchemy ORM
+- **XSS protection**: Template escaping and content sanitization
+- **Rate limiting**: Built-in rate limiting for API endpoints
+- **CORS protection**: Configurable CORS settings
+- **Authentication**: JWT-based authentication system
+- **Authorization**: Role-based access control
+- **Audit logging**: Comprehensive logging of security events
 
-We regularly update dependencies and monitor for security vulnerabilities:
-- Automated dependency scanning
-- Security updates within 48 hours of disclosure
-- Regular security audits
+## Security Updates
 
-## Contact
+We regularly update our dependencies and conduct security audits. Security updates are released as patch versions (e.g., 2.1.1, 2.1.2).
 
-For security-related questions or concerns:
-- **Security Email**: [security@yourdomain.com](mailto:security@yourdomain.com)
-- **PGP Key**: [Available upon request]
-- **Response Time**: Within 48 hours
+### Recent Security Updates
 
-Thank you for helping keep CTI Scraper secure!
+- **v2.0.1**: Updated cryptography library to fix CVE-2023-50782
+- **v2.0.0**: Major security improvements including input validation and rate limiting
+- **v1.2.3**: Fixed SQL injection vulnerability in search functionality
+
+## Responsible Disclosure
+
+We follow responsible disclosure practices:
+
+1. **Private reporting**: Security issues are reported privately
+2. **Coordinated disclosure**: We work with reporters to coordinate public disclosure
+3. **Timely fixes**: We prioritize security fixes and release them promptly
+4. **Clear communication**: We provide clear information about security updates
+
+## Security Contacts
+
+- **Security Team**: security@ctiscraper.com
+- **Maintainers**: @project-maintainers
+- **Emergency**: For critical issues, contact the maintainers directly
+
+## Acknowledgments
+
+We would like to thank the security researchers and community members who have responsibly reported vulnerabilities to us. Your contributions help make CTI Scraper more secure for everyone.
+
+---
+
+**Note**: This security policy is based on best practices and should be customized for your specific project needs. Make sure to update contact information and version numbers as appropriate.

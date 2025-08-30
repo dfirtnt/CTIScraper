@@ -37,7 +37,7 @@
                         class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                     <option value="">All Sources</option>
                     {% for source in sources %}
-                    <option value="{{ source.id }}" {% if filters.source == source.id|string %}selected{% endif %}>
+                    <option value="{{ source.id }}" {% if filters.source|string == source.id|string %}selected{% endif %}>
                         {{ source.name }}
                     </option>
                     {% endfor %}
@@ -50,10 +50,10 @@
                 <select name="quality_min" id="quality_min" 
                         class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                     <option value="">Any Quality</option>
-                    <option value="60" {% if filters.quality_min == 60 %}selected{% endif %}>Excellent (60+)</option>
-                    <option value="45" {% if filters.quality_min == 45 %}selected{% endif %}>Good (45+)</option>
-                    <option value="30" {% if filters.quality_min == 30 %}selected{% endif %}>Fair (30+)</option>
-                    <option value="0" {% if filters.quality_min == 0 %}selected{% endif %}>Limited (0+)</option>
+                    <option value="60" {% if filters.quality_min|string == "60" %}selected{% endif %}>Excellent (60+)</option>
+                    <option value="45" {% if filters.quality_min|string == "45" %}selected{% endif %}>Good (45+)</option>
+                    <option value="30" {% if filters.quality_min|string == "30" %}selected{% endif %}>Fair (30+)</option>
+                    <option value="0" {% if filters.quality_min|string == "0" %}selected{% endif %}>Limited (0+)</option>
                 </select>
             </div>
 
@@ -62,9 +62,9 @@
                 <label for="per_page" class="block text-sm font-medium text-gray-700 mb-1">Per Page</label>
                 <select name="per_page" id="per_page" 
                         class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                    <option value="20" {% if pagination.per_page == 20 %}selected{% endif %}>20</option>
-                    <option value="50" {% if pagination.per_page == 50 %}selected{% endif %}>50</option>
-                    <option value="100" {% if pagination.per_page == 100 %}selected{% endif %}>100</option>
+                    <option value="20" {% if pagination.per_page|string == "20" %}selected{% endif %}>20</option>
+                    <option value="50" {% if pagination.per_page|string == "50" %}selected{% endif %}>50</option>
+                    <option value="100" {% if pagination.per_page|string == "100" %}selected{% endif %}>100</option>
                 </select>
             </div>
         </form>
@@ -81,6 +81,73 @@
             </p>
         </div>
         {% endif %}
+
+        <!-- Quality Score Summary -->
+        <div class="mt-4 p-4 bg-white border border-gray-200 rounded-lg">
+            <h4 class="text-sm font-medium text-gray-900 mb-3">Quality Score Distribution</h4>
+            <div class="grid grid-cols-4 gap-4">
+                <div class="text-center">
+                    <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-1">
+                        <span class="text-green-600 text-xs">⭐</span>
+                    </div>
+                    <div class="text-xs text-gray-600">Excellent (60+)</div>
+                    <div class="text-sm font-medium text-gray-900">
+                        {% set excellent_count = 0 %}
+                        {% for article in articles %}
+                            {% if article.quality_score and article.quality_score >= 60 %}
+                                {% set excellent_count = excellent_count + 1 %}
+                            {% endif %}
+                        {% endfor %}
+                        {{ excellent_count }}
+                    </div>
+                </div>
+                <div class="text-center">
+                    <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-1">
+                        <span class="text-blue-600 text-xs">✓</span>
+                    </div>
+                    <div class="text-xs text-gray-600">Good (45-59)</div>
+                    <div class="text-sm font-medium text-gray-900">
+                        {% set good_count = 0 %}
+                        {% for article in articles %}
+                            {% if article.quality_score and article.quality_score >= 45 and article.quality_score < 60 %}
+                                {% set good_count = good_count + 1 %}
+                            {% endif %}
+                        {% endfor %}
+                        {{ good_count }}
+                    </div>
+                </div>
+                <div class="text-center">
+                    <div class="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-1">
+                        <span class="text-yellow-600 text-xs">○</span>
+                    </div>
+                    <div class="text-xs text-gray-600">Fair (30-44)</div>
+                    <div class="text-sm font-medium text-gray-900">
+                        {% set fair_count = 0 %}
+                        {% for article in articles %}
+                            {% if article.quality_score and article.quality_score >= 30 and article.quality_score < 45 %}
+                                {% set fair_count = fair_count + 1 %}
+                            {% endif %}
+                        {% endfor %}
+                        {{ fair_count }}
+                    </div>
+                </div>
+                <div class="text-center">
+                    <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-1">
+                        <span class="text-red-600 text-xs">⚠</span>
+                    </div>
+                    <div class="text-xs text-gray-600">Limited (<30)</div>
+                    <div class="text-sm font-medium text-gray-900">
+                        {% set limited_count = 0 %}
+                        {% for article in articles %}
+                            {% if article.quality_score and article.quality_score < 30 %}
+                                {% set limited_count = limited_count + 1 %}
+                            {% endif %}
+                        {% endfor %}
+                        {{ limited_count }}
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Articles List -->
@@ -109,6 +176,12 @@
                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                                 #{{ article.id }}
                             </span>
+                            {% if article.quality_score is not none %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                {% if article.quality_score >= 60 %}bg-green-100 text-green-800{% elif article.quality_score >= 45 %}bg-blue-100 text-blue-800{% elif article.quality_score >= 30 %}bg-yellow-100 text-yellow-800{% else %}bg-red-100 text-red-800{% endif %}">
+                                {% if article.quality_score >= 60 %}⭐ Excellent{% elif article.quality_score >= 45 %}✓ Good{% elif article.quality_score >= 30 %}○ Fair{% else %}⚠ Limited{% endif %} ({{ "%.0f"|format(article.quality_score) }})
+                            </span>
+                            {% endif %}
                         </div>
                         
                         <div class="flex items-center space-x-4 text-sm text-gray-500 mb-2">
@@ -129,6 +202,13 @@
                             </span>
                             {% if article.published_at %}
                             <span>Published: {{ article.published_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                            {% endif %}
+                            {% if article.quality_score is not none %}
+                            <span class="flex items-center">
+                                <span class="w-2 h-2 rounded-full mr-1 
+                                    {% if article.quality_score >= 60 %}bg-green-500{% elif article.quality_score >= 45 %}bg-blue-500{% elif article.quality_score >= 30 %}bg-yellow-500{% else %}bg-red-500{% endif %}"></span>
+                                Quality: {{ "%.0f"|format(article.quality_score) }}/100
+                            </span>
                             {% endif %}
                             <span>Content: {{ article.content|length }} characters</span>
                         </div>

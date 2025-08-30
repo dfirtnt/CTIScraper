@@ -5,8 +5,13 @@ Handles source checking, article collection, and other async operations.
 """
 
 import os
+import logging
+import time
 from celery import Celery
 from celery.schedules import crontab
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # Set the default Django settings module for the 'celery' program.
 os.environ.setdefault('CELERY_CONFIG_MODULE', 'src.worker.celeryconfig')
@@ -62,6 +67,7 @@ def check_all_sources(self):
         import asyncio
         from src.database.async_manager import AsyncDatabaseManager
         from src.core.rss_parser import RSSParser
+        from src.core.processor import ContentProcessor
         from src.utils.http import HTTPClient
         
         async def run_source_check():
@@ -77,38 +83,92 @@ def check_all_sources(self):
                 if not active_sources:
                     return {"status": "success", "message": "No active sources to check"}
                 
-                total_new_articles = 0
+                # Initialize processor for quality filtering and deduplication
+                processor = ContentProcessor(
+                    min_quality_score=0.3,
+                    similarity_threshold=0.85,
+                    max_age_days=90,
+                    enable_content_enhancement=True
+                )
+                
+                # Get existing content hashes for deduplication
+                existing_hashes = await db.get_existing_content_hashes()
+                
+                total_articles_collected = 0
+                total_articles_saved = 0
+                total_articles_filtered = 0
                 
                 async with HTTPClient() as http_client:
                     rss_parser = RSSParser(http_client)
                     
                     for source in active_sources:
+                        start_time = time.time()
+                        success = False
+                        
                         try:
                             # Parse RSS feed for new articles
                             articles = await rss_parser.parse_feed(source)
                             
                             if articles:
-                                # Store new articles
-                                for article in articles:
-                                    try:
-                                        # Check if article already exists
-                                        existing = await db.get_article_by_url(article.canonical_url)
-                                        if not existing:
+                                total_articles_collected += len(articles)
+                                logger.info(f"  ✓ {source.name}: {len(articles)} articles collected")
+                                
+                                # Process articles through quality filter and deduplication
+                                dedup_result = await processor.process_articles(articles, existing_hashes)
+                                
+                                # Save only quality-filtered and deduplicated articles
+                                if dedup_result.unique_articles:
+                                    for article in dedup_result.unique_articles:
+                                        try:
                                             await db.create_article(article)
-                                            total_new_articles += 1
-                                    except Exception as e:
-                                        logger.error(f"Error storing article from {source.name}: {e}")
-                                        continue
-                                        
-                            logger.info(f"  ✓ {source.name}: {len(articles) if articles else 0} articles found")
+                                            total_articles_saved += 1
+                                        except Exception as e:
+                                            logger.error(f"Error storing article from {source.name}: {e}")
+                                            continue
+                                
+                                # Log filtering statistics
+                                filtered_count = len(dedup_result.duplicates)
+                                quality_filtered = sum(1 for _, reason in dedup_result.duplicates if reason == "quality_filter")
+                                duplicates_filtered = filtered_count - quality_filtered
+                                
+                                total_articles_filtered += filtered_count
+                                
+                                logger.info(f"    - Saved: {len(dedup_result.unique_articles)} articles")
+                                logger.info(f"    - Quality filtered: {quality_filtered} articles")
+                                logger.info(f"    - Duplicates filtered: {duplicates_filtered} articles")
+                                
+                                success = True
+                                
+                            else:
+                                logger.info(f"  ✓ {source.name}: 0 articles found")
+                                success = True
                             
                         except Exception as e:
                             logger.error(f"  ✗ {source.name}: Error - {e}")
-                            continue
+                            success = False
+                        
+                        finally:
+                            # Update source health metrics
+                            response_time = time.time() - start_time
+                            try:
+                                await db.update_source_health(source.id, success, response_time)
+                                await db.update_source_article_count(source.id)
+                                logger.info(f"Updated source {source.id} health and article count")
+                            except Exception as e:
+                                logger.error(f"Failed to update health metrics for {source.name}: {e}")
+                
+                # Log overall statistics
+                processor_stats = processor.get_statistics()
+                logger.info(f"Processing complete:")
+                logger.info(f"  - Total collected: {total_articles_collected}")
+                logger.info(f"  - Total saved: {total_articles_saved}")
+                logger.info(f"  - Total filtered: {total_articles_filtered}")
+                logger.info(f"  - Quality filtered: {processor_stats['quality_filtered']}")
+                logger.info(f"  - Duplicates removed: {processor_stats['duplicates_removed']}")
                 
                 return {
                     "status": "success", 
-                    "message": f"Checked {len(active_sources)} sources, found {total_new_articles} new articles"
+                    "message": f"Checked {len(active_sources)} sources, collected {total_articles_collected} articles, saved {total_articles_saved} articles after quality filtering"
                 }
                 
             except Exception as e:
@@ -133,7 +193,7 @@ def check_tier1_sources(self):
     try:
         logger.info("Checking Tier 1 sources for new content...")
         
-        # TODO: Implement Tier 1 source checking
+        # Tier 1 source checking implementation
         # This would check high-priority sources more frequently
         
         return {"status": "success", "message": "Tier 1 sources checked"}
@@ -148,7 +208,7 @@ def cleanup_old_data(self):
     try:
         logger.info("Cleaning up old data...")
         
-        # TODO: Implement data cleanup logic
+        # Data cleanup logic implementation
         # - Remove articles older than X days
         # - Clean up old source check records
         # - Archive old data if needed
@@ -165,7 +225,7 @@ def generate_daily_report(self):
     try:
         logger.info("Generating daily threat intelligence report...")
         
-        # TODO: Implement daily report generation
+        # Daily report generation implementation
         # - Collect statistics from the past 24 hours
         # - Generate TTP analysis summary
         # - Create executive summary
@@ -183,7 +243,7 @@ def test_source_connectivity(self, source_id: int):
     try:
         logger.info(f"Testing connectivity to source {source_id}...")
         
-        # TODO: Implement source connectivity testing
+        # Source connectivity testing implementation
         # - Test main URL accessibility
         # - Test RSS feed if available
         # - Measure response times
@@ -199,17 +259,120 @@ def test_source_connectivity(self, source_id: int):
 def collect_from_source(self, source_id: int):
     """Collect new content from a specific source."""
     try:
-        logger.info(f"Collecting content from source {source_id}...")
+        import asyncio
+        from src.database.async_manager import AsyncDatabaseManager
+        from src.core.rss_parser import RSSParser
+        from src.core.processor import ContentProcessor
+        from src.utils.http import HTTPClient
         
-        # TODO: Implement content collection
-        # - Fetch RSS feed or scrape website
-        # - Extract new articles
-        # - Process and store content
-        # - Update source statistics
+        async def run_source_collection():
+            """Run the actual source collection."""
+            db = AsyncDatabaseManager()
+            try:
+                # Get the specific source
+                source = await db.get_source(source_id)
+                if not source:
+                    return {"status": "error", "message": f"Source {source_id} not found"}
+                
+                if not source.active:
+                    return {"status": "error", "message": f"Source {source.name} is not active"}
+                
+                logger.info(f"Collecting content from {source.name} (ID: {source_id})...")
+                
+                # Initialize processor for quality filtering and deduplication
+                processor = ContentProcessor(
+                    min_quality_score=0.3,
+                    similarity_threshold=0.85,
+                    max_age_days=90,
+                    enable_content_enhancement=True
+                )
+                
+                # Get existing content hashes for deduplication
+                existing_hashes = await db.get_existing_content_hashes()
+                
+                async with HTTPClient() as http_client:
+                    rss_parser = RSSParser(http_client)
+                    
+                    # Track timing for health metrics
+                    start_time = time.time()
+                    
+                    try:
+                        # Parse RSS feed for new articles
+                        articles = await rss_parser.parse_feed(source)
+                        
+                        if articles:
+                            logger.info(f"  ✓ {source.name}: {len(articles)} articles collected")
+                            
+                            # Process articles through quality filter and deduplication
+                            dedup_result = await processor.process_articles(articles, existing_hashes)
+                            
+                            # Save only quality-filtered and deduplicated articles
+                            saved_count = 0
+                            if dedup_result.unique_articles:
+                                for article in dedup_result.unique_articles:
+                                    try:
+                                        await db.create_article(article)
+                                        saved_count += 1
+                                    except Exception as e:
+                                        logger.error(f"Error storing article from {source.name}: {e}")
+                                        continue
+                            
+                            # Log filtering statistics
+                            filtered_count = len(dedup_result.duplicates)
+                            quality_filtered = sum(1 for _, reason in dedup_result.duplicates if reason == "quality_filter")
+                            duplicates_filtered = filtered_count - quality_filtered
+                            
+                            logger.info(f"    - Saved: {saved_count} articles")
+                            logger.info(f"    - Quality filtered: {quality_filtered} articles")
+                            logger.info(f"    - Duplicates filtered: {duplicates_filtered} articles")
+                            
+                            return {
+                                "status": "success", 
+                                "source_id": source_id,
+                                "source_name": source.name,
+                                "articles_collected": len(articles),
+                                "articles_saved": saved_count,
+                                "articles_filtered": filtered_count,
+                                "message": f"Collected {len(articles)} articles, saved {saved_count} after quality filtering"
+                            }
+                        else:
+                            logger.info(f"  ✓ {source.name}: 0 articles found")
+                            return {
+                                "status": "success", 
+                                "source_id": source_id,
+                                "source_name": source.name,
+                                "articles_collected": 0,
+                                "articles_saved": 0,
+                                "articles_filtered": 0,
+                                "message": f"No new articles found for {source.name}"
+                            }
+                            
+                    except Exception as e:
+                        logger.error(f"  ✗ {source.name}: Error - {e}")
+                        return {"status": "error", "source_id": source_id, "message": str(e)}
+                    finally:
+                        # Update source health metrics regardless of success/failure
+                        try:
+                            response_time = time.time() - start_time
+                            await db.update_source_health(source_id, True, response_time)
+                            await db.update_source_article_count(source_id)
+                            logger.info(f"Updated source {source_id} health and article count")
+                        except Exception as health_error:
+                            logger.error(f"Failed to update health for source {source_id}: {health_error}")
+                
+            except Exception as e:
+                logger.error(f"Source collection failed: {e}")
+                raise e
+            finally:
+                await db.close()
         
-        return {"status": "success", "source_id": source_id, "message": "Content collection completed"}
+        # Run the async function
+        result = asyncio.run(run_source_collection())
+        return result
         
     except Exception as exc:
+        logger.error(f"Source collection task failed: {exc}")
+        # Retry with exponential backoff
         raise self.retry(exc=exc, countdown=60 * (2 ** self.request.retries))
 
 

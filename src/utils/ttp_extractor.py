@@ -23,6 +23,7 @@ class HuntingTechnique:
     matched_text: str
     hunting_guidance: str
     position: Tuple[int, int]  # (start, end) character positions
+    relevance_score: float  # New field for relevance scoring
 
 
 @dataclass
@@ -36,6 +37,7 @@ class ThreatHuntingAnalysis:
     attack_vectors: List[str]
     overall_confidence: float
     hunting_priority: str  # High, Medium, Low
+    content_quality_score: float  # New field for content quality
 
 
 class ThreatHuntingDetector:
@@ -52,6 +54,47 @@ class ThreatHuntingDetector:
         self.threat_actor_patterns = self._build_threat_actor_patterns()
         self.malware_patterns = self._build_malware_patterns()
         self.attack_vector_patterns = self._build_attack_vector_patterns()
+        
+        # Content quality indicators
+        self.quality_indicators = self._build_quality_indicators()
+        
+        # Noise reduction patterns (common words that shouldn't trigger alerts)
+        self.noise_patterns = self._build_noise_patterns()
+    
+    def _build_noise_patterns(self) -> List[str]:
+        """Build patterns for common noise words that shouldn't trigger alerts."""
+        return [
+            r'\b(blog|post|article|report|analysis|study|research)\b',
+            r'\b(company|organization|team|group|department)\b',
+            r'\b(announcement|news|update|release|version)\b',
+            r'\b(conference|event|meeting|presentation|webinar)\b',
+            r'\b(partner|customer|client|user|community)\b',
+            r'\b(website|page|link|url|address)\b',
+            r'\b(contact|email|phone|support|help)\b'
+        ]
+    
+    def _build_quality_indicators(self) -> Dict[str, List[str]]:
+        """Build indicators for content quality assessment."""
+        return {
+            "technical_depth": [
+                "command line", "process execution", "registry key", "file path",
+                "network connection", "authentication", "privilege escalation",
+                "lateral movement", "persistence", "data exfiltration"
+            ],
+            "actionable_indicators": [
+                "ioc", "indicator of compromise", "hash", "sha256", "md5",
+                "ip address", "domain", "url", "email", "filename",
+                "registry path", "process name", "service name"
+            ],
+            "threat_context": [
+                "campaign", "threat actor", "malware family", "attack vector",
+                "vulnerability", "exploit", "zero-day", "cve-", "mitre att&ck"
+            ],
+            "detection_logic": [
+                "sigma rule", "yara rule", "detection rule", "hunting query",
+                "splunk query", "elasticsearch query", "kql", "spl"
+            ]
+        }
     
     def _build_hunting_patterns(self) -> Dict[str, List[Dict]]:
         """Build patterns for huntable techniques organized by category."""
@@ -63,12 +106,12 @@ class ThreatHuntingDetector:
                         r'\b(Password\s+Spray|Password\s+Spraying|Credential\s+Spray)\b',
                         r'\b(Brute\s+Force.*Password|Password.*Brute\s+Force)\b',
                         r'\b(Mass\s+Login.*Attempt|Bulk\s+Authentication)\b',
-                        # Broader patterns for limited content
-                        r'\b(Password\s+Spray)\b',
-                        r'\b(Credential\s+Spray)\b',
-                        r'\b(Brute\s+Force)\b'
+                        # More specific patterns
+                        r'\b(attempted\s+\d+\s+logins?\s+across\s+\d+\s+accounts?)\b',
+                        r'\b(failed\s+authentication\s+attempts?\s+from\s+multiple\s+users?)\b'
                     ],
-                    "hunting_guidance": "Monitor for multiple failed login attempts across multiple accounts, look for authentication logs with high failure rates"
+                    "hunting_guidance": "Monitor for multiple failed login attempts across multiple accounts, look for authentication logs with high failure rates",
+                    "relevance_threshold": 0.7
                 },
                 {
                     "name": "Credential Dumping",
@@ -76,23 +119,13 @@ class ThreatHuntingDetector:
                         r'\b(Credential\s+Dump|Password\s+Dump|Hash\s+Dump)\b',
                         r'\b(Mimikatz|LSASS|Memory\s+Dump.*Credential)\b',
                         r'\b(Procdump.*LSASS|WDigest|Kerberos\s+Credential)\b',
-                        # Broader patterns
-                        r'\b(LSASS)\b',
-                        r'\b(Credential\s+Dump)\b',
-                        r'\b(Hash\s+Dump)\b'
+                        # Specific tools and techniques
+                        r'\b(mimikatz\.exe|procdump\.exe|wdigest\.dll)\b',
+                        r'\b(lsass\.exe\s+memory\s+dump)\b',
+                        r'\b(sekurlsa::logonpasswords|sekurlsa::wdigest)\b'
                     ],
-                    "hunting_guidance": "Look for LSASS memory dumps, unusual process creation, WDigest registry modifications, Kerberos ticket requests"
-                },
-                {
-                    "name": "Keylogging",
-                    "patterns": [
-                        r'\b(Keylogger|Key\s+Logging|Keystroke\s+Capture)\b',
-                        r'\b(Keyboard\s+Hook|Input\s+Capture|Keystroke\s+Monitoring)\b',
-                        # Broader patterns
-                        r'\b(Keylogger)\b',
-                        r'\b(Keystroke\s+Capture)\b'
-                    ],
-                    "hunting_guidance": "Monitor for unusual keyboard hook installations, look for processes with keyboard monitoring capabilities"
+                    "hunting_guidance": "Look for LSASS memory dumps, unusual process creation, WDigest registry modifications, Kerberos ticket requests",
+                    "relevance_threshold": 0.8
                 }
             ],
             
@@ -103,34 +136,26 @@ class ThreatHuntingDetector:
                         r'\b(RDP.*Exploit|Remote\s+Desktop.*Attack)\b',
                         r'\b(RDP.*Brute\s+Force|RDP.*Password\s+Spray)\b',
                         r'\b(RDP.*Lateral|RDP.*Movement)\b',
-                        # Broader patterns
-                        r'\b(RDP)\b',
-                        r'\b(Remote\s+Desktop)\b',
-                        r'\b(Remote\s+Access)\b'
+                        # Specific RDP patterns
+                        r'\b(tscon\.exe|mstsc\.exe|rdp\s+connection)\b',
+                        r'\b(remote\s+desktop\s+services\s+log)\b',
+                        r'\b(rdp\s+brute\s+force\s+attempt)\b'
                     ],
-                    "hunting_guidance": "Monitor RDP connection logs, look for unusual RDP connections from internal IPs, check for RDP brute force attempts"
+                    "hunting_guidance": "Monitor RDP connection logs, look for unusual RDP connections from internal IPs, check for RDP brute force attempts",
+                    "relevance_threshold": 0.7
                 },
                 {
                     "name": "SSH Hijacking",
                     "patterns": [
                         r'\b(SSH.*Hijack|SSH.*Compromise|SSH.*Lateral)\b',
                         r'\b(SSH.*Key\s+Exchange|SSH.*Authentication\s+Bypass)\b',
-                        # Broader patterns
-                        r'\b(SSH.*Hijack)\b',
-                        r'\b(SSH.*Compromise)\b'
+                        # Specific SSH patterns
+                        r'\b(ssh\s+key\s+exchange\s+failure)\b',
+                        r'\b(ssh\s+authentication\s+bypass)\b',
+                        r'\b(ssh\s+connection\s+from\s+unusual\s+ip)\b'
                     ],
-                    "hunting_guidance": "Monitor SSH connection logs, look for unusual SSH key exchanges, check for SSH authentication bypass attempts"
-                },
-                {
-                    "name": "Pass the Hash",
-                    "patterns": [
-                        r'\b(Pass\s+the\s+Hash|PtH|Hash\s+Passing)\b',
-                        r'\b(NTLM.*Hash.*Reuse|Hash.*Authentication)\b',
-                        # Broader patterns
-                        r'\b(Pass\s+the\s+Hash)\b',
-                        r'\b(PtH)\b'
-                    ],
-                    "hunting_guidance": "Monitor for NTLM authentication events, look for hash reuse across systems, check for unusual authentication patterns"
+                    "hunting_guidance": "Monitor SSH connection logs, look for unusual SSH key exchanges, check for SSH authentication bypass attempts",
+                    "relevance_threshold": 0.8
                 }
             ],
             
@@ -141,290 +166,176 @@ class ThreatHuntingDetector:
                         r'\b(Scheduled\s+Task.*Creation|Task\s+Scheduler.*Attack)\b',
                         r'\b(Cron\s+Job.*Malicious|Automated\s+Task.*Attack)\b',
                         r'\b(Windows\s+Task.*Persistence|Linux\s+Cron.*Persistence)\b',
-                        # Broader patterns
-                        r'\b(Scheduled\s+Task)\b',
-                        r'\b(Cron\s+Job)\b',
-                        r'\b(Task\s+Scheduler)\b'
+                        # Specific task patterns
+                        r'\b(schtasks\.exe.*create|task\s+scheduler\s+api)\b',
+                        r'\b(cron\s+job\s+creation|at\s+command\s+execution)\b',
+                        r'\b(scheduled\s+task\s+with\s+suspicious\s+command)\b'
                     ],
-                    "hunting_guidance": "Monitor scheduled task creation, look for unusual task schedules, check for tasks running from suspicious locations"
+                    "hunting_guidance": "Monitor scheduled task creation, look for unusual task schedules, check for tasks running from suspicious locations",
+                    "relevance_threshold": 0.7
                 },
                 {
-                    "name": "Registry Modification",
+                    "name": "Registry Persistence",
                     "patterns": [
-                        r'\b(Registry.*Run\s+Key|Startup.*Registry|Registry.*Persistence)\b',
-                        r'\b(Run\s+Key.*Modification|Startup.*Key.*Attack)\b',
-                        # Broader patterns
-                        r'\b(Registry.*Run)\b',
-                        r'\b(Startup.*Registry)\b'
+                        # More specific patterns to avoid false positives
+                        r'\b(Registry\s+Run|Run\s+Key|Startup\s+Registry)\b',
+                        r'\b(\\Software\\Microsoft\\Windows\\CurrentVersion\\Run)\b',
+                        r'\b(Registry\s+modification|Registry\s+key)\b',
+                        # Specific registry patterns
+                        r'\b(HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run)\b',
+                        r'\b(HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run)\b',
+                        r'\b(reg\s+add.*run\s+key|registry\s+modification\s+for\s+persistence)\b'
                     ],
-                    "hunting_guidance": "Monitor registry modifications to Run keys, look for unusual startup programs, check for registry changes in startup locations"
-                },
-                {
-                    "name": "Service Installation",
-                    "patterns": [
-                        r'\b(Malicious\s+Service|Service.*Installation.*Attack)\b',
-                        r'\b(Windows\s+Service.*Persistence|Service.*Persistence)\b',
-                        # Broader patterns
-                        r'\b(Malicious\s+Service)\b',
-                        r'\b(Service.*Installation)\b',
-                        r'\b(Service)\b'  # Very broad for limited content
-                    ],
-                    "hunting_guidance": "Monitor service creation events, look for unusual service names, check for services running from suspicious locations"
+                    "hunting_guidance": "Monitor registry modifications to Run keys, look for unusual startup programs, check for registry changes in startup locations",
+                    "relevance_threshold": 0.8
                 }
             ],
             
             "Execution": [
                 {
+                    "name": "PowerShell Execution",
+                    "patterns": [
+                        r'\b(PowerShell.*Execution|PowerShell.*Attack)\b',
+                        r'\b(PowerShell.*Script|PowerShell.*Command)\b',
+                        # Specific PowerShell patterns
+                        r'\b(powershell\.exe.*-enc|powershell.*base64)\b',
+                        r'\b(powershell.*-executionpolicy\s+bypass)\b',
+                        r'\b(powershell.*invoke-expression|powershell.*iex)\b',
+                        r'\b(powershell.*downloadstring|powershell.*webclient)\b'
+                    ],
+                    "hunting_guidance": "Monitor PowerShell execution logs, look for encoded commands, check for execution policy bypass attempts",
+                    "relevance_threshold": 0.8
+                },
+                {
                     "name": "Process Injection",
                     "patterns": [
-                        r'\b(Process\s+Injection|Code\s+Injection|DLL\s+Injection)\b',
-                        r'\b(Process\s+Hollowing|Thread\s+Injection|Memory\s+Injection)\b',
-                        # Broader patterns
-                        r'\b(Process\s+Injection)\b',
-                        r'\b(Code\s+Injection)\b',
-                        r'\b(DLL\s+Injection)\b'
+                        r'\b(Process.*Injection|Code.*Injection)\b',
+                        r'\b(DLL.*Injection|Memory.*Injection)\b',
+                        # Specific injection patterns
+                        r'\b(createRemoteThread|virtualAllocEx|writeProcessMemory)\b',
+                        r'\b(process\s+injection\s+technique|dll\s+injection\s+method)\b',
+                        r'\b(memory\s+injection\s+into\s+process)\b'
                     ],
-                    "hunting_guidance": "Monitor for unusual process creation, look for processes with unexpected parent processes, check for code injection events"
-                },
-                {
-                    "name": "Living off the Land",
-                    "patterns": [
-                        r'\b(Living\s+off\s+the\s+Land|LotL|Built\s+in\s+Tools)\b',
-                        r'\b(PowerShell.*Attack|WMI.*Attack|CMD.*Attack)\b',
-                        r'\b(Legitimate\s+Tool.*Abuse|Built\s+in.*Malicious)\b',
-                        # Broader patterns
-                        r'\b(Living\s+off\s+the\s+Land)\b',
-                        r'\b(LotL)\b',
-                        r'\b(PowerShell.*Attack)\b',
-                        r'\b(WMI.*Attack)\b'
-                    ],
-                    "hunting_guidance": "Monitor PowerShell execution, look for unusual WMI queries, check for command line tool usage patterns"
-                },
-                {
-                    "name": "Fileless Execution",
-                    "patterns": [
-                        r'\b(Fileless\s+Attack|Memory\s+Based.*Execution)\b',
-                        r'\b(No\s+File.*Execution|Memory.*Code.*Execution)\b',
-                        # Broader patterns
-                        r'\b(Fileless\s+Attack)\b',
-                        r'\b(Memory\s+Based.*Execution)\b'
-                    ],
-                    "hunting_guidance": "Monitor for unusual memory allocations, look for processes with unexpected memory regions, check for code execution without file creation"
+                    "hunting_guidance": "Monitor for unusual process creation, look for DLL injection attempts, check for memory allocation patterns",
+                    "relevance_threshold": 0.9
                 }
             ],
             
-            "Defense Evasion": [
-                {
-                    "name": "Process Hiding",
-                    "patterns": [
-                        r'\b(Process\s+Hiding|Process\s+Obfuscation|Hidden\s+Process)\b',
-                        r'\b(Process.*Disguise|Process.*Camouflage)\b',
-                        # Broader patterns
-                        r'\b(Process\s+Hiding)\b',
-                        r'\b(Hidden\s+Process)\b'
-                    ],
-                    "hunting_guidance": "Look for processes with unusual names, check for processes that don't appear in task manager, monitor for process hiding techniques"
-                },
-                {
-                    "name": "Anti-Detection",
-                    "patterns": [
-                        r'\b(Anti\s+Detection|Anti\s+Analysis|Detection\s+Evasion)\b',
-                        r'\b(Sandbox\s+Evasion|VM\s+Detection|Analysis\s+Evasion)\b',
-                        # Broader patterns
-                        r'\b(Anti\s+Detection)\b',
-                        r'\b(Detection\s+Evasion)\b'
-                    ],
-                    "hunting_guidance": "Monitor for unusual system calls, look for environment detection attempts, check for anti-analysis behavior"
-                },
-                {
-                    "name": "Security Tool Disabling",
-                    "patterns": [
-                        r'\b(Security\s+Tool.*Disable|AV.*Disable|Firewall.*Disable)\b',
-                        r'\b(Endpoint.*Protection.*Bypass|Security.*Bypass)\b',
-                        # Broader patterns
-                        r'\b(Security\s+Tool.*Disable)\b',
-                        r'\b(AV.*Disable)\b'
-                    ],
-                    "hunting_guidance": "Monitor for security service stops, look for unusual registry modifications to security tools, check for security tool tampering"
-                }
-            ],
-            
-            "Command & Control": [
-                {
-                    "name": "DNS Tunneling",
-                    "patterns": [
-                        r'\b(DNS\s+Tunneling|DNS.*Exfiltration|DNS.*C2)\b',
-                        r'\b(DNS.*Command|DNS.*Control|DNS.*Communication)\b',
-                        # Broader patterns
-                        r'\b(DNS\s+Tunneling)\b',
-                        r'\b(DNS.*C2)\b'
-                    ],
-                    "hunting_guidance": "Monitor for unusual DNS queries, look for long DNS names, check for DNS traffic patterns that don't match normal web browsing"
-                },
-                {
-                    "name": "HTTP C2",
-                    "patterns": [
-                        r'\b(HTTP.*C2|HTTP.*Command|HTTP.*Control)\b',
-                        r'\b(Web.*Based.*C2|HTTP.*Communication.*Channel)\b',
-                        # Broader patterns
-                        r'\b(HTTP.*C2)\b',
-                        r'\b(Web.*Based.*C2)\b'
-                    ],
-                    "hunting_guidance": "Monitor for unusual HTTP requests, look for requests to suspicious domains, check for unusual HTTP headers or payloads"
-                },
-                {
-                    "name": "Encrypted C2",
-                    "patterns": [
-                        r'\b(Encrypted.*C2|Encrypted.*Communication|TLS.*C2)\b',
-                        r'\b(SSL.*Tunnel|Encrypted.*Tunnel.*C2)\b',
-                        # Broader patterns
-                        r'\b(Encrypted.*C2)\b',
-                        r'\b(TLS.*C2)\b'
-                    ],
-                    "hunting_guidance": "Monitor for unusual TLS connections, look for connections to suspicious IPs, check for unusual certificate usage"
-                }
-            ],
-            
-            "Data Exfiltration": [
-                {
-                    "name": "Data Staging",
-                    "patterns": [
-                        r'\b(Data\s+Staging|Data.*Collection.*Point|Staging.*Area)\b',
-                        r'\b(Data.*Gathering.*Point|Collection.*Point)\b',
-                        # Broader patterns
-                        r'\b(Data\s+Staging)\b',
-                        r'\b(Staging.*Area)\b'
-                    ],
-                    "hunting_guidance": "Monitor for unusual file creation in staging directories, look for large data transfers, check for unusual data collection patterns"
-                },
-                {
-                    "name": "Exfiltration Over Network",
-                    "patterns": [
-                        r'\b(Data.*Exfiltration.*Network|Network.*Data.*Theft)\b',
-                        r'\b(Data.*Upload.*External|External.*Data.*Transfer)\b',
-                        # Broader patterns
-                        r'\b(Data.*Exfiltration)\b',
-                        r'\b(Network.*Data.*Theft)\b'
-                    ],
-                    "hunting_guidance": "Monitor for unusual outbound connections, look for large data transfers, check for connections to suspicious external destinations"
-                },
-                {
-                    "name": "Exfiltration Over Physical Media",
-                    "patterns": [
-                        r'\b(USB.*Exfiltration|Physical.*Media.*Theft)\b',
-                        r'\b(Removable.*Media.*Data|USB.*Data.*Theft)\b',
-                        # Broader patterns
-                        r'\b(USB.*Exfiltration)\b',
-                        r'\b(Physical.*Media.*Theft)\b'
-                    ],
-                    "hunting_guidance": "Monitor for unusual USB device usage, look for large data transfers to removable media, check for unusual file access patterns"
-                }
-            ],
-            
-            # Add new category for broader threat indicators
+            # Improved Threat Indicators with better precision
             "Threat Indicators": [
                 {
                     "name": "Malware Detection",
                     "patterns": [
-                        r'\b(Malware|Ransomware|Trojan|RAT|Backdoor|Worm|Virus)\b',
-                        r'\b(Spyware|Adware|Loader|Dropper|Packer)\b',
-                        # Very broad patterns for limited content
-                        r'\b(Malware)\b',
-                        r'\b(Ransomware)\b',
-                        r'\b(Trojan)\b',
-                        r'\b(RAT)\b'
+                        # More specific malware patterns
+                        r'\b(identified\s+malware|detected\s+ransomware|found\s+trojan)\b',
+                        r'\b(malware\s+analysis|ransomware\s+encryption|trojan\s+behavior)\b',
+                        r'\b(malware\s+family|ransomware\s+variant|trojan\s+variant)\b',
+                        # Specific malware families
+                        r'\b(emotet|trickbot|ryuk|conti|revil)\b',
+                        r'\b(lockbit|blackcat|alphv|clop|darkside)\b',
+                        # Avoid generic terms
+                        r'\b(malware\s+detected|ransomware\s+attack|trojan\s+infection)\b'
                     ],
-                    "hunting_guidance": "Monitor for unusual file creation, look for suspicious process behavior, check for unusual network connections"
+                    "hunting_guidance": "Monitor for unusual file creation, look for suspicious process behavior, check for unusual network connections",
+                    "relevance_threshold": 0.8
                 },
                 {
                     "name": "Intrusion Indicators",
                     "patterns": [
-                        r'\b(Intrusion|Breach|Compromise|Attack|Exploit)\b',
-                        r'\b(Threat|Actor|Campaign|Operation)\b',
-                        # Very broad patterns
-                        r'\b(Intrusion)\b',
-                        r'\b(Breach)\b',
-                        r'\b(Compromise)\b',
-                        r'\b(Attack)\b'
+                        # More specific intrusion patterns
+                        r'\b(confirmed\s+intrusion|verified\s+breach|confirmed\s+compromise)\b',
+                        r'\b(intrusion\s+detection|breach\s+investigation|compromise\s+analysis)\b',
+                        r'\b(intrusion\s+timeline|breach\s+timeline|compromise\s+timeline)\b',
+                        # Specific attack patterns
+                        r'\b(initial\s+access|privilege\s+escalation|lateral\s+movement)\b',
+                        r'\b(command\s+and\s+control|data\s+exfiltration|persistence)\b',
+                        # Avoid generic terms
+                        r'\b(attack\s+detected|threat\s+identified|security\s+incident)\b'
                     ],
-                    "hunting_guidance": "Monitor for unusual system activity, look for unauthorized access attempts, check for unusual user behavior"
+                    "hunting_guidance": "Monitor for unusual system activity, look for unauthorized access attempts, check for unusual user behavior",
+                    "relevance_threshold": 0.8
                 }
             ],
             
-            # NEW: High-Value Hunting Patterns (Based on user's analysis)
+            # High-Value Hunting Patterns with improved precision
             "High-Value Hunting Patterns": [
                 {
                     "name": "Process Chain Detection",
                     "patterns": [
-                        r'\b(ParentImage|Parent.*Process|Process.*Chain)\b',
-                        r'\b(PowerShell.*spawn|Process.*spawning|Child.*process)\b',
-                        r'\b(\\\\.*\.exe.*\\\\.*\.exe|Process.*hierarchy)\b',
-                        # Specific process chains
-                        r'\b(powershell\.exe.*php\.exe)\b',
-                        r'\b(cmd\.exe.*powershell\.exe)\b',
-                        r'\b(wscript\.exe.*rundll32\.exe)\b'
+                        # Specific process chain patterns
+                        r'\b(powershell\.exe.*spawns.*cmd\.exe)\b',
+                        r'\b(cmd\.exe.*spawns.*powershell\.exe)\b',
+                        r'\b(wscript\.exe.*spawns.*rundll32\.exe)\b',
+                        r'\b(process\s+chain.*suspicious|parent.*child.*process.*unusual)\b',
+                        r'\b(process\s+hierarchy.*malicious|process\s+tree.*attack)\b'
                     ],
-                    "hunting_guidance": "Monitor for unusual parent-child process relationships, look for PowerShell spawning unexpected processes, check for process chains that don't match normal application behavior"
+                    "hunting_guidance": "Monitor for unusual parent-child process relationships, look for PowerShell spawning unexpected processes, check for process chains that don't match normal application behavior",
+                    "relevance_threshold": 0.9
                 },
                 {
                     "name": "Registry Persistence",
                     "patterns": [
-                        r'\b(Registry.*Run|Run.*Key|Startup.*Registry)\b',
-                        r'\b(\\Software\\Microsoft\\Windows\\CurrentVersion\\Run)\b',
-                        r'\b(Registry.*modification|Registry.*key)\b',
                         # Specific registry patterns
                         r'\b(HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run)\b',
-                        r'\b(HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run)\b'
+                        r'\b(HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run)\b',
+                        r'\b(registry\s+key\s+persistence|run\s+key\s+malicious)\b',
+                        r'\b(registry\s+modification\s+startup|registry\s+key\s+autorun)\b'
                     ],
-                    "hunting_guidance": "Monitor registry modifications to Run keys, look for unusual startup programs, check for registry changes in startup locations, focus on HKCU and HKLM Run keys"
+                    "hunting_guidance": "Monitor registry modifications to Run keys, look for unusual startup programs, check for registry changes in startup locations",
+                    "relevance_threshold": 0.9
                 },
                 {
                     "name": "Command Pattern Detection",
                     "patterns": [
-                        r'\b(systeminfo|tasklist|Get-Service|Get-Process)\b',
-                        r'\b(Get-NetNeighbor|Get-NetRoute|netstat)\b',
-                        r'\b(CommandLine|Command.*Line|Command.*arguments)\b',
                         # Specific reconnaissance commands
-                        r'\b(Get-WmiObject|wmic|Get-ComputerInfo)\b',
-                        r'\b(Get-ADUser|Get-ADComputer|Get-ADGroup)\b'
+                        r'\b(systeminfo.*command|tasklist.*execution)\b',
+                        r'\b(get-service.*powershell|get-process.*enumeration)\b',
+                        r'\b(get-netneighbor.*network|get-netroute.*routing)\b',
+                        r'\b(get-wmiobject.*system|wmic.*query)\b',
+                        r'\b(get-aduser.*enumeration|get-adcomputer.*discovery)\b'
                     ],
-                    "hunting_guidance": "Monitor for unusual command execution patterns, look for reconnaissance commands in unexpected contexts, check for PowerShell commands that gather system information"
+                    "hunting_guidance": "Monitor for unusual command execution patterns, look for reconnaissance commands in unexpected contexts, check for PowerShell commands that gather system information",
+                    "relevance_threshold": 0.8
                 },
                 {
                     "name": "File Path Specificity",
                     "patterns": [
-                        r'\b(\\AppData\\Roaming\\|\\AppData\\Local\\|\\Temp\\)\b',
-                        r'\b(\\Users\\\w+\\AppData\\|\\ProgramData\\)\b',
-                        r'\b(Suspicious.*path|Unusual.*location|Malicious.*directory)\b',
                         # Specific suspicious paths
                         r'\b(\\AppData\\Roaming\\php\\php\.exe)\b',
-                        r'\b(\\AppData\\Local\\Temp\\\w+\.exe)\b'
+                        r'\b(\\AppData\\Local\\Temp\\\w+\.exe)\b',
+                        r'\b(\\Users\\\w+\\AppData\\Roaming\\\w+\.exe)\b',
+                        r'\b(suspicious\s+file\s+path|unusual\s+file\s+location)\b',
+                        r'\b(malicious\s+file\s+in\s+appdata|executable\s+in\s+temp)\b'
                     ],
-                    "hunting_guidance": "Monitor for unusual file creation in suspicious locations, look for executables in AppData directories, check for unusual file paths that don't match normal application behavior"
+                    "hunting_guidance": "Monitor for unusual file creation in suspicious locations, look for executables in AppData directories, check for unusual file paths that don't match normal application behavior",
+                    "relevance_threshold": 0.8
                 },
                 {
                     "name": "Network Infrastructure",
                     "patterns": [
-                        r'\b(trycloudflare\.com|cloudflare\.com)\b',
-                        r'\b(Suspicious.*domain|Malicious.*IP|C2.*infrastructure)\b',
-                        r'\b(Command.*and.*Control|C2|C&C)\b',
                         # Specific network patterns
-                        r'\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b',  # IP addresses
-                        r'\b([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b'  # Domain patterns
+                        r'\b(trycloudflare\.com|cloudflare\.com.*abuse)\b',
+                        r'\b(suspicious\s+domain.*c2|malicious\s+ip.*command)\b',
+                        r'\b(command\s+and\s+control.*server|c2\s+infrastructure)\b',
+                        # IP and domain patterns with context
+                        r'\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}.*malicious)\b',
+                        r'\b([a-zA-Z0-9.-]+\.[a-zA-Z]{2,}.*suspicious)\b'
                     ],
-                    "hunting_guidance": "Monitor for connections to suspicious domains and IPs, look for abuse of legitimate services like Cloudflare, check for unusual network traffic patterns"
+                    "hunting_guidance": "Monitor for connections to suspicious domains and IPs, look for abuse of legitimate services like Cloudflare, check for unusual network traffic patterns",
+                    "relevance_threshold": 0.8
                 },
                 {
                     "name": "Sigma Rule Content",
                     "patterns": [
-                        r'\b(Sigma.*rule|Detection.*rule|Hunting.*rule)\b',
-                        r'\b(selection:|detection:|condition:)\b',
-                        r'\b(MITRE.*ATT&CK|T\d{4}\.\d{3})\b',
-                        # Specific Sigma syntax
-                        r'\b(ParentImage|Image|CommandLine|TargetObject)\b',
-                        r'\b(endswith|contains|matches_regex)\b'
+                        # Specific Sigma rule patterns
+                        r'\b(sigma\s+rule.*detection|detection\s+rule.*sigma)\b',
+                        r'\b(selection:.*|detection:.*|condition:.*)\b',
+                        r'\b(mitre\s+att&ck.*t\d{4}\.\d{3})\b',
+                        r'\b(parentimage.*|image.*|commandline.*|targetobject.*)\b',
+                        r'\b(endswith.*|contains.*|matches_regex.*)\b'
                     ],
-                    "hunting_guidance": "This content contains Sigma detection rules - extract and implement these rules in your SIEM, look for MITRE ATT&CK technique mappings, focus on the specific detection logic provided"
+                    "hunting_guidance": "This content contains Sigma detection rules - extract and implement these rules in your SIEM, look for MITRE ATT&CK technique mappings, focus on the specific detection logic provided",
+                    "relevance_threshold": 0.9
                 }
             ]
         }
@@ -485,20 +396,35 @@ class ThreatHuntingDetector:
                 for pattern in technique["patterns"]:
                     matches = re.finditer(pattern, content, re.IGNORECASE)
                     for match in matches:
+                        # Calculate confidence
+                        confidence = self._calculate_technique_confidence(match, content, technique)
+                        
+                        # Filter out low-confidence matches
+                        if confidence < 0.3:  # Minimum confidence threshold
+                            continue
+                        
+                        # Check for duplicate matches (same technique, similar position)
+                        if self._is_duplicate_match(match, techniques_by_category[category]):
+                            continue
+                        
                         hunting_technique = HuntingTechnique(
                             technique_name=technique["name"],
                             category=category,
-                            confidence=self._calculate_technique_confidence(match, content, technique),
+                            confidence=confidence,
                             context=self._extract_context(content, match.start(), match.end()),
                             matched_text=match.group(),
                             hunting_guidance=technique["hunting_guidance"],
-                            position=(match.start(), match.end())
+                            position=(match.start(), match.end()),
+                            relevance_score=technique.get("relevance_threshold", 0.5)
                         )
                         techniques_by_category[category].append(hunting_technique)
         
         # Calculate overall confidence and hunting priority
         overall_confidence = self._calculate_overall_confidence(techniques_by_category, content)
         hunting_priority = self._determine_hunting_priority(techniques_by_category, overall_confidence)
+        
+        # Calculate content quality score
+        content_quality_score = self.calculate_ttp_quality_score(content)['total_score']
         
         return ThreatHuntingAnalysis(
             article_id=article_id,
@@ -508,29 +434,93 @@ class ThreatHuntingDetector:
             malware_families=malware_families,
             attack_vectors=attack_vectors,
             overall_confidence=overall_confidence,
-            hunting_priority=hunting_priority
+            hunting_priority=hunting_priority,
+            content_quality_score=content_quality_score
         )
     
     def _calculate_technique_confidence(self, match: re.Match, content: str, technique: Dict) -> float:
         """Calculate confidence score for a hunting technique."""
         confidence = 0.5  # Base confidence
         
-        # Higher confidence for exact matches
-        if match.group().isupper():
+        # Get context around the match
+        context = self._extract_context(content, match.start(), match.end())
+        context_lower = context.lower()
+        matched_text = match.group()
+        
+        # Check for noise patterns (reduce confidence if found)
+        noise_score = 0
+        for noise_pattern in self.noise_patterns:
+            if re.search(noise_pattern, context_lower):
+                noise_score += 0.1
+        confidence -= min(noise_score, 0.3)  # Cap noise reduction at 0.3
+        
+        # Higher confidence for specific technical context
+        technical_indicators = {
+            'command_line': ['command line', 'cmd.exe', 'powershell.exe', 'execution'],
+            'process': ['process', 'parent process', 'child process', 'process tree'],
+            'registry': ['registry', 'reg key', 'hkey', 'registry modification'],
+            'network': ['network', 'connection', 'ip address', 'domain', 'http'],
+            'file': ['file', 'file path', 'directory', 'file creation'],
+            'malware': ['malware', 'trojan', 'ransomware', 'backdoor', 'infection']
+        }
+        
+        # Check which technical context matches
+        context_matches = 0
+        for category, terms in technical_indicators.items():
+            if any(term in context_lower for term in terms):
+                context_matches += 1
+        
+        # Add confidence based on technical context matches
+        if context_matches >= 2:
+            confidence += 0.3
+        elif context_matches == 1:
+            confidence += 0.15
+        
+        # Higher confidence for specific malware families or threat actors
+        specific_terms = ['emotet', 'trickbot', 'ryuk', 'conti', 'revil', 'lockbit', 'blackcat']
+        if any(term in context_lower for term in specific_terms):
             confidence += 0.2
         
-        # Higher confidence for technical context
-        context = self._extract_context(content, match.start(), match.end())
-        technical_terms = ['attack', 'threat', 'malware', 'exploit', 'vulnerability', 'compromise']
-        if any(term in context.lower() for term in technical_terms):
-            confidence += 0.2
+        # Higher confidence for actionable indicators
+        actionable_terms = ['ioc', 'indicator', 'hash', 'sha256', 'md5', 'detection']
+        if any(term in context_lower for term in actionable_terms):
+            confidence += 0.15
         
         # Higher confidence for recent/current threat context
         time_terms = ['2024', '2025', 'recent', 'current', 'ongoing', 'active']
-        if any(term in context.lower() for term in time_terms):
+        if any(term in context_lower for term in time_terms):
             confidence += 0.1
         
-        return min(confidence, 1.0)
+        # Higher confidence for longer, more specific matches
+        if len(matched_text) > 20:
+            confidence += 0.1
+        elif len(matched_text) > 10:
+            confidence += 0.05
+        
+        # Apply relevance threshold from technique definition
+        relevance_threshold = technique.get('relevance_threshold', 0.5)
+        if confidence < relevance_threshold:
+            confidence = confidence * 0.8  # Reduce confidence if below threshold
+        
+        return min(max(confidence, 0.1), 1.0)  # Ensure confidence is between 0.1 and 1.0
+    
+    def _is_duplicate_match(self, match: re.Match, existing_techniques: List[HuntingTechnique]) -> bool:
+        """Check if a match is a duplicate of an existing technique."""
+        match_text = match.group().lower()
+        match_start = match.start()
+        
+        for existing in existing_techniques:
+            # Check if it's the same technique
+            if existing.technique_name == match.group():
+                # Check if positions are close (within 50 characters)
+                if abs(existing.position[0] - match_start) < 50:
+                    return True
+                
+                # Check if matched text is very similar
+                if existing.matched_text.lower() == match_text:
+                    return True
+        
+        return False
     
     def _calculate_overall_confidence(self, techniques_by_category: Dict, content: str) -> float:
         """Calculate overall confidence score for the analysis."""
@@ -754,18 +744,51 @@ class ThreatHuntingDetector:
         return list(set(vectors))
     
     def _extract_context(self, content: str, start: int, end: int) -> str:
-        """Extract context around a technique match."""
-        context_size = 100
+        """Extract context around a technique match with improved precision."""
+        # Try to extract context at sentence boundaries
+        context_size = 150  # Increased for better context
+        
+        # Find sentence boundaries
         start_context = max(0, start - context_size)
         end_context = min(len(content), end + context_size)
         
-        context = content[start_context:end_context]
-        if start_context > 0:
+        # Try to find sentence boundaries
+        sentence_start = start_context
+        sentence_end = end_context
+        
+        # Look for sentence start (period, exclamation, question mark followed by space)
+        for i in range(start, start_context, -1):
+            if i < len(content) and content[i] in '.!?' and i + 1 < len(content) and content[i + 1] in ' \n\t':
+                sentence_start = i + 1
+                break
+        
+        # Look for sentence end
+        for i in range(end, end_context):
+            if i < len(content) and content[i] in '.!?':
+                sentence_end = i + 1
+                break
+        
+        # Extract the context
+        context = content[sentence_start:sentence_end].strip()
+        
+        # Add ellipsis if we're not at the beginning/end of content
+        if sentence_start > 0:
             context = "..." + context
-        if end_context < len(content):
+        if sentence_end < len(content):
             context = context + "..."
         
-        return context.strip()
+        # Clean up the context
+        context = re.sub(r'\s+', ' ', context)  # Normalize whitespace
+        context = context.strip()
+        
+        # Limit context length if too long
+        if len(context) > 300:
+            # Try to find a good break point
+            words = context.split()
+            if len(words) > 20:
+                context = ' '.join(words[:20]) + "..."
+        
+        return context
     
     def generate_hunting_report(self, analysis: ThreatHuntingAnalysis) -> str:
         """Generate a human-readable hunting report."""
@@ -775,6 +798,7 @@ class ThreatHuntingDetector:
         report.append(f"Total Techniques: {analysis.total_techniques}")
         report.append(f"Overall Confidence: {analysis.overall_confidence:.2f}")
         report.append(f"Hunting Priority: {analysis.hunting_priority}")
+        report.append(f"Content Quality Score: {analysis.content_quality_score:.2f}")
         report.append("")
         
         if analysis.techniques_by_category:

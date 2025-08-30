@@ -1,0 +1,60 @@
+# Testing and Development Dependencies for CTI Scraper
+
+# Core Testing Framework
+pytest==8.4.1
+pytest-asyncio==1.1.0
+pytest-cov==5.0.0
+pytest-httpx==0.35.0
+pytest-mock==3.14.0
+pytest-xdist==3.6.1
+
+# Code Quality and Linting
+black==24.1.1
+isort==5.13.2
+flake8==7.0.0
+mypy==1.8.0
+bandit==1.7.7
+safety==2.3.5
+
+# Type Checking
+types-requests==2.31.0.20240125
+types-PyYAML==6.0.12.12
+
+# Development Tools
+pre-commit==3.6.2
+ipython==9.5.0
+jupyter==1.1.1
+
+# Documentation
+sphinx==7.2.6
+sphinx-rtd-theme==2.0.0
+myst-parser==3.0.1
+
+# Performance Testing
+locust==3.0.0
+pytest-benchmark==4.0.0
+
+# Security Testing
+bandit==1.7.7
+safety==2.3.5
+semgrep==1.50.0
+
+# Database Testing
+pytest-postgresql==5.0.0
+pytest-redis==4.0.0
+
+# Mock and Fixtures
+factory-boy==3.3.0
+faker==24.1.0
+
+# API Testing
+httpx==0.28.1
+requests-mock==1.11.0
+
+# Coverage and Reporting
+coverage==7.4.3
+pytest-html==4.1.1
+
+# Debugging
+pdbpp==0.10.3
+ipdb==0.13.13

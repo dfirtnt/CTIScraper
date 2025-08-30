@@ -2,25 +2,70 @@
 
 **Enterprise-grade threat intelligence aggregation and analysis platform built with modern technologies.**
 
-## 🚀 **What's New in Version 2.0**
+[![CI/CD Pipeline](https://github.com/your-username/CTIScraper/workflows/CI/badge.svg)](https://github.com/your-username/CTIScraper/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-### **Architecture Improvements**
-- **PostgreSQL Database**: Replaced SQLite with production-grade PostgreSQL
-- **Async/Await**: Full async support with FastAPI and SQLAlchemy
-- **Connection Pooling**: Efficient database connection management
-- **Background Tasks**: Celery worker system for async operations
-- **Redis Caching**: High-performance caching and message queuing
-- **Docker Containerization**: Production-ready container orchestration
-- **Nginx Reverse Proxy**: Professional-grade web server with rate limiting
+## 📋 Table of Contents
 
-### **Performance Enhancements**
-- **Concurrent Operations**: Handle multiple users and operations simultaneously
-- **Database Locking**: Eliminated SQLite locking issues
-- **Connection Management**: Proper session handling and cleanup
-- **Task Queuing**: Asynchronous processing of heavy operations
-- **Health Monitoring**: Built-in health checks and monitoring
+- [Overview](#overview)
+- [Features](#features)
+- [Technology Stack](#technology-stack)
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [API Documentation](#api-documentation)
+- [Security](#security)
+- [Contributing](#contributing)
+- [License](#license)
 
-## 🏗️ **Technology Stack**
+## 🎯 Overview
+
+CTI Scraper is a comprehensive threat intelligence platform that automatically collects, analyzes, and processes threat intelligence from various sources. Built with modern async Python technologies, it provides enterprise-grade performance, scalability, and security.
+
+### Key Capabilities
+
+- **Automated Collection**: RSS feed parsing and web scraping with anti-bot protection
+- **Content Analysis**: LLM-powered quality assessment and TTP extraction
+- **Real-time Processing**: Async architecture with background task processing
+- **Modern Web Interface**: HTMX-powered dashboard with real-time analytics
+- **Production Ready**: Docker containerization with PostgreSQL and Redis
+
+## ✨ Features
+
+### 🔍 **Intelligence Collection**
+- **Multi-source RSS/Atom feed parsing**
+- **Advanced web scraping with anti-bot detection**
+- **Content deduplication and quality validation**
+- **Source health monitoring and alerting**
+
+### 🤖 **AI-Powered Analysis**
+- **LLM-based content quality assessment**
+- **TTP (Tactics, Techniques, Procedures) extraction**
+- **Multi-model AI chatbot with source attribution**
+- **Threat hunting priority scoring**
+
+### 🏗️ **Modern Architecture**
+- **Async/await throughout the stack**
+- **PostgreSQL with connection pooling**
+- **Redis caching and message queuing**
+- **Celery background task processing**
+
+### 🛡️ **Security & Compliance**
+- **Environment-based configuration**
+- **Input validation and sanitization**
+- **Rate limiting and CORS protection**
+- **Comprehensive audit logging**
+
+### 📊 **Web Dashboard**
+- **Real-time analytics and metrics**
+- **Source management interface**
+- **Article browsing and search**
+- **TTP analysis visualization**
+
+## 🏗️ Technology Stack
 
 ### **Backend**
 - **FastAPI 2.0**: Modern, fast web framework with async support
@@ -41,10 +86,18 @@
 - **Uvicorn**: ASGI server for FastAPI
 - **Alembic**: Database migrations
 
-## 📦 **Quick Start**
+## 🚀 Quick Start
 
 ### **Option 1: Production Stack (Docker)**
 ```bash
+# Clone the repository
+git clone https://github.com/your-username/CTIScraper.git
+cd CTIScraper
+
+# Copy environment template
+cp env.example .env
+# Edit .env with your configuration
+
 # Start the complete production stack
 ./start_production.sh
 
@@ -54,20 +107,23 @@ open http://localhost
 
 ### **Option 2: Development Environment**
 ```bash
-# Start local development environment
-./start_development.sh
+# Clone and setup
+git clone https://github.com/your-username/CTIScraper.git
+cd CTIScraper
 
-# Access the application
-open http://localhost:8000
-```
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-### **Option 3: Manual Setup**
-```bash
 # Install dependencies
 pip install -r requirements.txt
 
-# Start PostgreSQL and Redis
-brew services start postgresql@15
+# Setup environment
+cp env.example .env
+# Edit .env with your settings
+
+# Start services
+brew services start postgresql@15  # macOS
 brew services start redis
 
 # Create database
@@ -77,68 +133,119 @@ createdb cti_scraper
 python src/web/modern_main.py
 ```
 
-## 🔧 **Configuration**
+## 📦 Installation
+
+### **Prerequisites**
+- Python 3.9+
+- PostgreSQL 15+
+- Redis 7+
+- Docker & Docker Compose (for production)
+
+### **System Dependencies**
+```bash
+# macOS
+brew install postgresql@15 redis
+
+# Ubuntu/Debian
+sudo apt-get install postgresql-15 redis-server
+
+# CentOS/RHEL
+sudo yum install postgresql15-server redis
+```
+
+### **Python Dependencies**
+```bash
+# Install Python packages
+pip install -r requirements.txt
+
+# For development
+pip install -r requirements-test.txt
+```
+
+## ⚙️ Configuration
 
 ### **Environment Variables**
-Copy `config.production.env` to `.env` and modify as needed:
+Copy `env.example` to `.env` and configure:
 
 ```bash
-# Database
+# Database Configuration
 DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/dbname
-POSTGRES_PASSWORD=your_password
+POSTGRES_PASSWORD=your_secure_password
 
-# Redis
+# Redis Configuration
 REDIS_URL=redis://:password@localhost:6379/0
 REDIS_PASSWORD=your_redis_password
 
-# Application
+# Application Configuration
 ENVIRONMENT=production
-LOG_LEVEL=INFO
-SECRET_KEY=your-secret-key
+SECRET_KEY=your-super-secret-key-change-this
 ```
 
-### **Database Configuration**
+### **Source Configuration**
+Add threat intelligence sources via the web interface or API:
+
+```python
+# Example source configuration
+{
+    "name": "The DFIR Report",
+    "url": "https://thedfirreport.com/feed/",
+    "type": "rss",
+    "tier": 1,
+    "check_frequency": 900  # 15 minutes
+}
+```
+
+## 🎮 Usage
+
+### **Web Interface**
+- **Dashboard**: `http://localhost:8000/`
+- **Sources**: `http://localhost:8000/sources`
+- **Articles**: `http://localhost:8000/articles`
+- **Chat**: `http://localhost:8000/chat`
+
+### **CLI Commands**
 ```bash
-# PostgreSQL connection settings
-DB_POOL_SIZE=20
-DB_MAX_OVERFLOW=30
-DB_POOL_PRE_PING=true
-DB_POOL_RECYCLE=3600
+# List sources
+python -m src.cli.main sources list
+
+# Collect from all sources
+python -m src.cli.main collect
+
+# Analyze articles for TTPs
+python -m src.cli.main analyze
+
+# Export articles
+python -m src.cli.main export --format csv
+
+# Monitor sources continuously
+python -m src.cli.main monitor --interval 3600
 ```
 
-## 🗄️ **Database Schema**
+### **API Usage**
+```bash
+# Health check
+curl http://localhost:8000/health
 
-### **Core Tables**
-- **`sources`**: Threat intelligence sources and configuration
-- **`articles`**: Collected threat intelligence articles
-- **`source_checks`**: Source health and connectivity monitoring
-- **`content_hashes`**: Content deduplication
-- **`url_tracking`**: URL processing history
+# List sources
+curl http://localhost:8000/api/sources
 
-### **Modern Features**
-- **Async Operations**: Non-blocking database operations
-- **Connection Pooling**: Efficient connection management
-- **Transaction Management**: Proper ACID compliance
-- **Migration Support**: Alembic for schema evolution
+# Get articles
+curl http://localhost:8000/api/articles
 
-## 🔄 **Background Tasks**
+# Chat with AI
+curl -X POST http://localhost:8000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "What are the latest ransomware trends?"}'
+```
 
-### **Scheduled Tasks**
-- **Hourly**: Check all sources for new content
-- **15 Minutes**: Check Tier 1 (high-priority) sources
-- **Daily 2 AM**: Clean up old data
-- **Daily 6 AM**: Generate threat intelligence reports
+## 📚 API Documentation
 
-### **Task Queues**
-- **`source_checks`**: Source connectivity testing
-- **`priority_checks`**: High-priority source monitoring
-- **`collection`**: Content collection and processing
-- **`maintenance`**: System maintenance tasks
-- **`reports`**: Report generation
+### **Interactive Documentation**
+- **Swagger UI**: `http://localhost:8000/docs`
+- **ReDoc**: `http://localhost:8000/redoc`
+- **OpenAPI Schema**: `http://localhost:8000/openapi.json`
 
-## 📊 **API Endpoints**
-
-### **Core API**
+### **Core Endpoints**
 ```bash
 # Health and monitoring
 GET /health                    # System health check
@@ -152,146 +259,82 @@ GET /api/sources/{id}/stats   # Get source statistics
 
 # Article management
 GET /api/articles/{id}        # Get specific article
+POST /api/articles/search     # Search articles
+GET /api/articles/export      # Export articles
+
+# AI Chat
+POST /api/chat               # Send message to chatbot
+GET /api/chat/history        # Get conversation history
+POST /api/chat/clear         # Clear conversation history
 ```
 
-### **Web Interface**
-```bash
-# Main pages
-/                    # Dashboard
-/sources             # Source management
-/articles            # Article listing
-/articles/{id}       # Article detail
-```
+## 🔒 Security
 
-## 🐳 **Docker Services**
-
-### **Service Architecture**
-```yaml
-postgres:    # PostgreSQL database
-redis:       # Redis cache and message broker
-web:         # FastAPI web application
-worker:      # Celery worker for background tasks
-scheduler:   # Celery beat for scheduled tasks
-nginx:       # Reverse proxy and load balancer
-```
-
-### **Management Commands**
-```bash
-# View logs
-docker-compose logs -f [service]
-
-# Restart service
-docker-compose restart [service]
-
-# Stop all services
-docker-compose down
-
-# Rebuild and start
-docker-compose up --build -d
-```
-
-## 📈 **Monitoring & Health**
-
-### **Health Checks**
-- **Database**: Connection and query performance
-- **Redis**: Cache and message broker status
-- **Web Service**: API responsiveness
-- **Background Workers**: Task processing status
-
-### **Metrics**
-- **Source Health**: Success rates and response times
-- **Content Collection**: Articles per source and time
-- **System Performance**: Response times and throughput
-- **Error Rates**: Failed operations and exceptions
-
-## 🔒 **Security Features**
-
-### **Built-in Security**
-- **Rate Limiting**: API and web request throttling
-- **CORS Protection**: Cross-origin request handling
+### **Built-in Security Features**
 - **Input Validation**: Pydantic model validation
 - **SQL Injection Protection**: Parameterized queries
-- **XSS Protection**: Template escaping and sanitization
+- **XSS Protection**: Template escaping
+- **Rate Limiting**: API and web request throttling
+- **CORS Protection**: Cross-origin request handling
+- **Environment Variables**: No hardcoded secrets
 
-### **Production Hardening**
-- **Environment Isolation**: Separate dev/prod configs
-- **Secret Management**: Environment variable configuration
-- **Access Control**: Database user permissions
-- **Network Security**: Container network isolation
+### **Security Best Practices**
+1. **Use HTTPS in production**
+2. **Keep dependencies updated**
+3. **Monitor logs for suspicious activity**
+4. **Use strong, unique passwords**
+5. **Enable security features**
 
-## 🚀 **Performance Features**
+### **Reporting Security Issues**
+**Do not report security vulnerabilities through public GitHub issues.**
 
-### **Optimization**
-- **Connection Pooling**: Efficient database connections
-- **Async Processing**: Non-blocking I/O operations
-- **Caching**: Redis-based result caching
-- **Compression**: Gzip compression for responses
-- **Background Processing**: Heavy operations offloaded
+Please report security issues via email to `security@ctiscraper.com`. See our [Security Policy](.github/SECURITY.md) for details.
 
-### **Scalability**
-- **Horizontal Scaling**: Multiple worker processes
-- **Load Balancing**: Nginx reverse proxy
-- **Queue Management**: Celery task distribution
-- **Database Sharding**: Ready for future expansion
+## 🤝 Contributing
 
-## 🧪 **Testing & Development**
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
-### **Development Tools**
+### **Quick Start for Contributors**
 ```bash
+# Fork and clone
+git clone https://github.com/your-username/CTIScraper.git
+cd CTIScraper
+
+# Setup development environment
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+pip install -r requirements-test.txt
+
 # Run tests
 pytest
 
-# Code formatting
+# Format code
 black src/
+isort src/
 
-# Linting
-flake8 src/
-
-# Type checking
-mypy src/
+# Create feature branch
+git checkout -b feature/your-feature
 ```
 
-### **Local Development**
-```bash
-# Start development environment
-./start_development.sh
+### **Development Guidelines**
+- Follow PEP 8 with Black formatting
+- Use type hints for all functions
+- Write tests for new features
+- Update documentation
+- Follow security best practices
 
-# Hot reload enabled
-# Code changes automatically reload
-```
-
-## 📚 **Documentation**
-
-### **API Documentation**
-- **Interactive Docs**: Available at `/docs` (Swagger UI)
-- **ReDoc**: Alternative docs at `/redoc`
-- **OpenAPI Schema**: Machine-readable API specification
-
-### **Code Documentation**
-- **Type Hints**: Full Python type annotations
-- **Docstrings**: Comprehensive function documentation
-- **Examples**: Usage examples in docstrings
-
-## 🤝 **Contributing**
-
-### **Development Setup**
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests and documentation
-5. Submit a pull request
-
-### **Code Standards**
-- **Python**: PEP 8 compliance
-- **Type Hints**: Required for all functions
-- **Documentation**: Docstrings for all public APIs
-- **Testing**: Unit tests for new features
-
-## 📄 **License**
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🆘 **Support**
+## 🆘 Support
+
+### **Getting Help**
+- **Issues**: [GitHub Issues](https://github.com/your-username/CTIScraper/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/your-username/CTIScraper/discussions)
+- **Documentation**: This README and inline code docs
+- **Security**: See [SECURITY.md](.github/SECURITY.md)
 
 ### **Common Issues**
 - **Database Connection**: Check PostgreSQL service status
@@ -299,19 +342,26 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Port Conflicts**: Ensure ports 8000, 5432, 6379 are available
 - **Permission Issues**: Check file permissions and ownership
 
-### **Getting Help**
-- **Issues**: GitHub issue tracker
-- **Documentation**: This README and inline code docs
-- **Community**: GitHub discussions and discussions
+## 🏆 Acknowledgments
+
+- **Contributors**: All who have contributed to this project
+- **Open Source**: Built on amazing open source technologies
+- **Security Community**: For feedback and security improvements
 
 ---
 
-## 🎯 **Next Steps**
+## 📈 Roadmap
 
-1. **Start the Production Stack**: `./start_production.sh`
-2. **Explore the API**: Visit `http://localhost/docs`
-3. **Monitor Health**: Check `http://localhost/health`
-4. **Configure Sources**: Add your threat intelligence sources
-5. **Customize Alerts**: Set up notification preferences
+### **Upcoming Features**
+- [ ] Advanced threat correlation
+- [ ] Machine learning-based threat detection
+- [ ] Integration with SIEM platforms
+- [ ] Mobile application
+- [ ] Advanced reporting and analytics
 
-**Welcome to the future of threat intelligence! 🚀**
+### **Version History**
+See [CHANGELOG.md](CHANGELOG.md) for detailed version history and migration guides.
+
+---
+
+**CTI Scraper** - Making threat intelligence accessible and actionable. 🚀

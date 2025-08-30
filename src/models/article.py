@@ -21,6 +21,8 @@ class Article(BaseModel):
     content: str = Field(..., min_length=1, description="Full article content")
     content_hash: str = Field(..., description="SHA256 hash of content for deduplication")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Raw structured data")
+    quality_score: Optional[float] = Field(None, description="Content quality score (0-100)")
+    word_count: Optional[int] = Field(None, description="Word count of the article")
     discovered_at: datetime = Field(default_factory=datetime.utcnow, description="When article was discovered")
     processing_status: str = Field(default="pending", description="Processing status")
     

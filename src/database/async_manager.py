@@ -33,7 +33,7 @@ class AsyncDatabaseManager:
     
     def __init__(
         self,
-        database_url: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://cti_user:cti_password_2024@postgres:5432/cti_scraper"),
+        database_url: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://user:password@localhost:5432/cti_scraper"),
         echo: bool = False,
         pool_size: int = 20,
         max_overflow: int = 30,
@@ -130,7 +130,15 @@ class AsyncDatabaseManager:
                 articles_last_24h = recent_articles_result.scalar()
                 
                 # Database size (approximate)
-                db_size_mb = 0.0  # Would need actual DB size query
+                # Calculate size based on content length
+                content_size_result = await session.execute(
+                    select(func.sum(func.length(ArticleTable.content)))
+                )
+                total_content_bytes = content_size_result.scalar() or 0
+                
+                # Add estimated size for metadata, titles, etc. (roughly 20% overhead)
+                estimated_total_bytes = int(total_content_bytes * 1.2)
+                db_size_mb = round(estimated_total_bytes / (1024 * 1024), 2)
                 
                 return {
                     "total_sources": total_sources or 0,
@@ -179,6 +187,36 @@ class AsyncDatabaseManager:
         except Exception as e:
             logger.error(f"Failed to list sources: {e}")
             return []
+    
+    async def create_source(self, source_data: SourceCreate) -> Optional[Source]:
+        """Create a new source."""
+        try:
+            async with self.get_session() as session:
+                # Convert SourceCreate to SourceTable
+                db_source = SourceTable(
+                    identifier=source_data.identifier,
+                    name=source_data.name,
+                    url=source_data.url,
+                    rss_url=source_data.rss_url,
+                    tier=source_data.tier,
+                    weight=source_data.weight,
+                    check_frequency=source_data.check_frequency,
+                    active=source_data.active,
+                    config=source_data.config.dict() if source_data.config else {},
+                    created_at=datetime.now(),
+                    updated_at=datetime.now()
+                )
+                
+                session.add(db_source)
+                await session.commit()
+                await session.refresh(db_source)
+                
+                logger.info(f"Created source: {source_data.name}")
+                return self._db_source_to_model(db_source)
+                
+        except Exception as e:
+            logger.error(f"Failed to create source: {e}")
+            return None
     
     async def get_source(self, source_id: int) -> Optional[Source]:
         """Get a specific source by ID."""
@@ -268,6 +306,63 @@ class AsyncDatabaseManager:
             logger.error(f"Failed to toggle source {source_id}: {e}")
             raise
     
+    async def update_source_health(self, source_id: int, success: bool, response_time: float = 0.0):
+        """Update source health metrics."""
+        try:
+            async with self.get_session() as session:
+                result = await session.execute(
+                    select(SourceTable).where(SourceTable.id == source_id)
+                )
+                db_source = result.scalar_one_or_none()
+                
+                if not db_source:
+                    return
+                
+                # Update metrics
+                if success:
+                    db_source.consecutive_failures = 0
+                    db_source.last_success = datetime.utcnow()
+                else:
+                    db_source.consecutive_failures += 1
+                
+                db_source.last_check = datetime.utcnow()
+                
+                # Update average response time
+                if db_source.average_response_time == 0.0:
+                    db_source.average_response_time = response_time
+                else:
+                    db_source.average_response_time = (db_source.average_response_time + response_time) / 2
+                
+                await session.commit()
+                
+        except Exception as e:
+            logger.error(f"Failed to update source health for {source_id}: {e}")
+            raise
+    
+    async def update_source_article_count(self, source_id: int):
+        """Update the total articles count for a source."""
+        try:
+            async with self.get_session() as session:
+                # Count articles for this source
+                result = await session.execute(
+                    select(func.count(ArticleTable.id)).where(ArticleTable.source_id == source_id)
+                )
+                article_count = result.scalar()
+                
+                # Update the source's total_articles field
+                await session.execute(
+                    update(SourceTable)
+                    .where(SourceTable.id == source_id)
+                    .values(total_articles=article_count)
+                )
+                
+                await session.commit()
+                logger.info(f"Updated source {source_id} article count to {article_count}")
+                
+        except Exception as e:
+            logger.error(f"Failed to update source article count for {source_id}: {e}")
+            raise
+    
     async def list_articles(self, limit: Optional[int] = None) -> List[Article]:
         """List articles with optional limit."""
         try:
@@ -320,6 +415,151 @@ class AsyncDatabaseManager:
             logger.error(f"Failed to get article by URL {canonical_url}: {e}")
             return None
     
+    async def list_articles_by_source(self, source_id: int) -> List[Article]:
+        """Get all articles for a specific source."""
+        try:
+            async with self.get_session() as session:
+                query = select(ArticleTable).where(ArticleTable.source_id == source_id).order_by(desc(ArticleTable.discovered_at))
+                result = await session.execute(query)
+                db_articles = result.scalars().all()
+                
+                return [self._db_article_to_model(db_article) for db_article in db_articles]
+                
+        except Exception as e:
+            logger.error(f"Failed to list articles by source {source_id}: {e}")
+            return []
+    
+    async def create_article(self, article: ArticleCreate) -> Optional[Article]:
+        """Create a new article in the database."""
+        try:
+            async with self.get_session() as session:
+                # Convert timezone-aware datetimes to timezone-naive
+                published_at = article.published_at
+                if published_at.tzinfo is not None:
+                    published_at = published_at.replace(tzinfo=None)
+                
+                modified_at = article.modified_at
+                if modified_at and modified_at.tzinfo is not None:
+                    modified_at = modified_at.replace(tzinfo=None)
+                
+                # Calculate quality score if not already provided
+                quality_score = article.metadata.get('quality_score')
+                if quality_score is None:
+                    from src.utils.content import QualityScorer
+                    quality_score = QualityScorer.score_article(
+                        article.title, 
+                        article.content, 
+                        article.metadata
+                    )
+                    # Convert to 0-100 scale if needed
+                    if quality_score <= 1.0:
+                        quality_score = quality_score * 100
+                
+                # Calculate word count
+                word_count = len(article.content.split()) if article.content else 0
+                
+                # Convert ArticleCreate to ArticleTable
+                db_article = ArticleTable(
+                    source_id=article.source_id,
+                    canonical_url=article.canonical_url,
+                    title=article.title,
+                    published_at=published_at,
+                    modified_at=modified_at,
+                    authors=article.authors,
+                    tags=article.tags,
+                    summary=article.summary,
+                    content=article.content,
+                    content_hash=article.content_hash,
+                    article_metadata=article.metadata,
+                    quality_score=quality_score,
+                    word_count=word_count,
+                    discovered_at=datetime.utcnow(),  # Set current time
+                    processing_status="pending"  # Default status
+                )
+                
+                session.add(db_article)
+                await session.commit()
+                await session.refresh(db_article)
+                
+                logger.info(f"Created article: {article.title}")
+                return self._db_article_to_model(db_article)
+                
+        except Exception as e:
+            logger.error(f"Failed to create article: {e}")
+            return None
+    
+    async def update_article(self, article_id: int, update_data: ArticleUpdate) -> Optional[Article]:
+        """Update an existing article."""
+        try:
+            async with self.get_session() as session:
+                # Get the article
+                result = await session.execute(
+                    select(ArticleTable).where(ArticleTable.id == article_id)
+                )
+                db_article = result.scalar_one_or_none()
+                
+                if not db_article:
+                    return None
+                
+                # Update fields
+                update_dict = update_data.dict(exclude_unset=True)
+                for field, value in update_dict.items():
+                    if field == 'metadata' and value:
+                        setattr(db_article, 'article_metadata', value)
+                    else:
+                        setattr(db_article, field, value)
+                
+                # Update timestamp
+                db_article.updated_at = datetime.utcnow()
+                
+                await session.commit()
+                await session.refresh(db_article)
+                
+                logger.info(f"Updated article: {db_article.title}")
+                return self._db_article_to_model(db_article)
+                
+        except Exception as e:
+            logger.error(f"Failed to update article {article_id}: {e}")
+            return None
+    
+    async def delete_article(self, article_id: int) -> bool:
+        """Delete an article."""
+        try:
+            async with self.get_session() as session:
+                # Get the article
+                result = await session.execute(
+                    select(ArticleTable).where(ArticleTable.id == article_id)
+                )
+                db_article = result.scalar_one_or_none()
+                
+                if not db_article:
+                    return False
+                
+                # Delete the article
+                await session.delete(db_article)
+                await session.commit()
+                
+                logger.info(f"Deleted article: {db_article.title}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to delete article {article_id}: {e}")
+            return False
+    
+    async def get_existing_content_hashes(self, limit: int = 10000) -> set:
+        """Get existing content hashes for deduplication."""
+        try:
+            async with self.get_session() as session:
+                result = await session.execute(
+                    select(ArticleTable.content_hash).limit(limit)
+                )
+                hashes = result.scalars().all()
+                return set(hashes)
+                
+        except Exception as e:
+            logger.error(f"Failed to get existing content hashes: {e}")
+            return set()
+    
     def _db_source_to_model(self, db_source: SourceTable) -> Source:
         """Convert database source to Pydantic model."""
         from src.models.source import SourceConfig
@@ -358,6 +598,8 @@ class AsyncDatabaseManager:
             content=db_article.content,
             content_hash=db_article.content_hash,
             metadata=db_article.article_metadata,
+            quality_score=db_article.quality_score,
+            word_count=db_article.word_count,
             discovered_at=db_article.discovered_at,
             processing_status=db_article.processing_status
         )

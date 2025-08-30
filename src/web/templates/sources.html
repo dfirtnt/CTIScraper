@@ -18,6 +18,22 @@
         </div>
     </div>
 
+    <!-- 90-Day Window Note -->
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <div class="flex items-start">
+            <div class="flex-shrink-0">
+                <span class="text-blue-400 text-lg">ℹ️</span>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-blue-800">Collection Window</h3>
+                <p class="text-sm text-blue-700">
+                    Articles older than <strong>90 days</strong> are automatically filtered out during collection to maintain data freshness. 
+                    This ensures your threat intelligence feed contains only recent and relevant information.
+                </p>
+            </div>
+        </div>
+    </div>
+
     <!-- Database Status Banner -->
     <div id="dbStatusBanner" class="hidden bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
         <div class="flex items-center">
@@ -92,7 +108,7 @@
                             </div>
                             <div>
                                 <p class="text-sm text-gray-500">Articles Collected</p>
-                                <p class="text-sm font-medium text-gray-900">{{ source.articles_count or 0 }}</p>
+                                <p class="text-sm font-medium text-gray-900">{{ source.total_articles or 0 }}</p>
                             </div>
                         </div>
 
@@ -108,10 +124,7 @@
                                 <span class="mr-2">⚙️</span>
                                 Edit
                             </button>
-                            <button onclick="testSource({{ source.id }})" class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
-                                <span class="mr-2">🔄</span>
-                                Test
-                            </button>
+
                             <button onclick="showSourceStats({{ source.id }})" class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
                                 <span class="mr-2">📊</span>
                                 Stats
@@ -232,52 +245,7 @@
 </div>
 
 <script>
-async function testSource(sourceId) {
-    try {
-        showLoadingModal('Testing Source', 'Testing source connectivity...');
-        
-        const response = await fetch(`/api/sources/${sourceId}/test`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        });
-        
-        const result = await response.json();
-        
-        if (response.ok) {
-            let content = `<div class="space-y-3">`;
-            content += `<p><strong>Source:</strong> ${result.source_name}</p>`;
-            content += `<p><strong>Overall Status:</strong> <span class="${result.overall_success ? 'text-green-600' : 'text-red-600'}">${result.overall_success ? '✅ Success' : '❌ Failed'}</span></p>`;
-            content += `<div class="mt-4"><strong>Test Results:</strong></div>`;
-            
-            for (const test of result.tests) {
-                content += `<div class="border border-gray-200 rounded p-3 mt-2">`;
-                content += `<p><strong>${test.type.replace('_', ' ').toUpperCase()}:</strong></p>`;
-                content += `<p><strong>URL:</strong> <span class="font-mono text-xs">${test.url}</span></p>`;
-                content += `<p><strong>Status:</strong> <span class="${test.success ? 'text-green-600' : 'text-red-600'}">${test.success ? '✅ Success' : '❌ Failed'}</span></p>`;
-                
-                if (test.status) {
-                    content += `<p><strong>HTTP Status:</strong> ${test.status}</p>`;
-                }
-                if (test.response_time_ms) {
-                    content += `<p><strong>Response Time:</strong> ${Math.round(test.response_time_ms)}ms</p>`;
-                }
-                if (test.error) {
-                    content += `<p><strong>Error:</strong> <span class="text-red-600 font-mono text-xs">${test.error}</span></p>`;
-                }
-                content += `</div>`;
-            }
-            content += `</div>`;
-            
-            showModal('Source Test Results', content);
-        } else {
-            showModal('Test Failed', `<p class="text-red-600">Failed to test source: ${result.detail || 'Unknown error'}</p>`);
-        }
-    } catch (error) {
-        showModal('Test Error', `<p class="text-red-600">Error testing source: ${error.message}</p>`);
-    }
-}
+
 
 async function showSourceStats(sourceId) {
     try {

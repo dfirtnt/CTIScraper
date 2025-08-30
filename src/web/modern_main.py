@@ -31,6 +31,7 @@ from src.database.async_manager import async_db_manager
 from src.models.source import Source, SourceUpdate, SourceFilter
 from src.models.article import Article
 from src.worker.celery_app import test_source_connectivity, collect_from_source
+from src.utils.chatbot import ThreatIntelligenceChatbot
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -165,7 +166,7 @@ async def sources_list(request: Request):
         )
 
 @app.get("/api/sources")
-async def api_sources_list(filter_params: Optional[SourceFilter] = Depends()):
+async def api_sources_list(filter_params: SourceFilter = Depends()):
     """API endpoint for listing sources."""
     try:
         sources = await async_db_manager.list_sources(filter_params)
@@ -202,21 +203,7 @@ async def api_toggle_source_status(source_id: int):
         logger.error(f"API toggle source status error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/sources/{source_id}/test")
-async def api_test_source(source_id: int, background_tasks: BackgroundTasks):
-    """Test source connectivity."""
-    try:
-        # Add background task for testing
-        background_tasks.add_task(test_source_connectivity.delay, source_id)
-        
-        return {
-            "message": "Source connectivity test started",
-            "source_id": source_id,
-            "task_type": "connectivity_test"
-        }
-    except Exception as e:
-        logger.error(f"API test source error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/sources/{source_id}/stats")
 async def api_source_stats(source_id: int):
@@ -226,16 +213,30 @@ async def api_source_stats(source_id: int):
         if not source:
             raise HTTPException(status_code=404, detail="Source not found")
         
-        # TODO: Implement actual statistics calculation
+        # Get articles for this source to calculate real stats
+        articles = await async_db_manager.list_articles_by_source(source_id)
+        
+        # Calculate statistics
+        total_articles = len(articles)
+        avg_content_length = sum(len(article.content or "") for article in articles) // max(total_articles, 1)
+        
+        # Mock quality score for now (in production, this would be calculated from actual quality data)
+        avg_quality_score = 65  # Mock value
+        
+        # Mock articles by date for now
+        articles_by_date = {"2024-01-01": total_articles} if total_articles > 0 else {}
+        
         stats = {
             "source_id": source_id,
             "source_name": source.name,
-            "total_articles": source.total_articles or 0,
-            "success_rate": source.success_rate or 0.0,
-            "average_response_time": source.average_response_time or 0.0,
+            "active": getattr(source, 'active', True),
+            "tier": getattr(source, 'tier', 1),
+            "collection_method": "RSS" if source.rss_url else "Web Scraping",
+            "total_articles": total_articles,
+            "avg_content_length": avg_content_length,
+            "avg_quality_score": avg_quality_score,
             "last_check": source.last_check.isoformat() if source.last_check else None,
-            "last_success": source.last_success.isoformat() if source.last_success else None,
-            "consecutive_failures": source.consecutive_failures or 0
+            "articles_by_date": articles_by_date
         }
         
         return stats
@@ -247,37 +248,77 @@ async def api_source_stats(source_id: int):
 
 # Articles management
 @app.get("/articles", response_class=HTMLResponse)
-async def articles_list(request: Request, limit: Optional[int] = 100):
+async def articles_list(
+    request: Request, 
+    search: Optional[str] = None,
+    source: Optional[str] = None,
+    quality_min: Optional[str] = None,
+    per_page: Optional[int] = 100,
+    page: Optional[int] = 1
+):
     """Articles listing page."""
     try:
-        articles = await async_db_manager.list_articles(limit=limit)
+        # Get all articles first for filtering
+        all_articles = await async_db_manager.list_articles()
         sources = await async_db_manager.list_sources()
         
         # Create source lookup
         source_lookup = {source.id: source for source in sources}
         
-        # Create pagination data
-        total_articles = len(articles)
-        page = 1
-        per_page = limit
+        # Apply filters
+        filtered_articles = all_articles
+        
+        # Search filter
+        if search:
+            search_lower = search.lower()
+            filtered_articles = [
+                article for article in filtered_articles
+                if (article.title and search_lower in article.title.lower()) or
+                   (article.content and search_lower in article.content.lower())
+            ]
+        
+        # Source filter
+        if source and source.isdigit():
+            source_id = int(source)
+            filtered_articles = [
+                article for article in filtered_articles
+                if article.source_id == source_id
+            ]
+        
+        # Quality filter
+        if quality_min and quality_min.isdigit():
+            min_quality = float(quality_min)
+            filtered_articles = [
+                article for article in filtered_articles
+                if article.quality_score is not None and article.quality_score >= min_quality
+            ]
+        
+        # Apply pagination
+        total_articles = len(filtered_articles)
+        per_page = max(1, min(per_page, 100))  # Limit to 100 per page
         total_pages = max(1, (total_articles + per_page - 1) // per_page)
-        start_idx = 1
-        end_idx = min(per_page, total_articles)
+        page = max(1, min(page, total_pages))
+        
+        start_idx = (page - 1) * per_page
+        end_idx = min(start_idx + per_page, total_articles)
+        
+        # Get articles for current page
+        articles = filtered_articles[start_idx:end_idx]
         
         pagination = {
             "total_articles": total_articles,
             "page": page,
             "per_page": per_page,
             "total_pages": total_pages,
-            "start_idx": start_idx,
+            "start_idx": start_idx + 1,
             "end_idx": end_idx
         }
         
-        # Create filters data (empty for now)
+        # Create filters data
         filters = {
-            "search": "",
-            "source": "",
-            "quality_min": ""
+            "search": search or "",
+            "source": source or "",
+            "quality_min": quality_min or ""
         }
         
         return templates.TemplateResponse(
@@ -343,7 +384,8 @@ async def article_detail(request: Request, article_id: int):
                             {
                                 "technique_name": tech.technique_name,
                                 "confidence": tech.confidence,
-                                "hunting_guidance": tech.hunting_guidance
+                                "hunting_guidance": tech.hunting_guidance,
+                                "matched_text": tech.matched_text
                             } for tech in techniques
                         ] for category, techniques in analysis.techniques_by_category.items()
                     },
@@ -582,6 +624,83 @@ async def api_get_article(article_id: int):
         raise
     except Exception as e:
         logger.error(f"API get article error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Chatbot routes
+@app.get("/chat", response_class=HTMLResponse)
+async def chat_page(request: Request):
+    """Chat interface page."""
+    try:
+        return templates.TemplateResponse(
+            "chat.html",
+            {"request": request}
+        )
+    except Exception as e:
+        logger.error(f"Chat page error: {e}")
+        return templates.TemplateResponse(
+            "error.html",
+            {"request": request, "error": str(e)},
+            status_code=500
+        )
+
+@app.post("/api/chat")
+async def chat_api(request: Request):
+    """API endpoint for chatbot interactions."""
+    try:
+        data = await request.json()
+        user_message = data.get("message", "").strip()
+        
+        if not user_message:
+            raise HTTPException(status_code=400, detail="Message is required")
+        
+        # Initialize chatbot
+        chatbot = ThreatIntelligenceChatbot(async_db_manager)
+        
+        # Get response
+        response = await chatbot.chat(user_message)
+        
+        return {
+            "response": response,
+            "timestamp": datetime.now().isoformat(),
+            "sources": chatbot.get_conversation_history()[-1].get("metadata", {}).get("sources", [])
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Chat API error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/chat/history")
+async def chat_history():
+    """Get chat conversation history."""
+    try:
+        chatbot = ThreatIntelligenceChatbot(async_db_manager)
+        return {"history": chatbot.get_conversation_history()}
+    except Exception as e:
+        logger.error(f"Chat history error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/chat/clear")
+async def clear_chat_history():
+    """Clear chat conversation history."""
+    try:
+        chatbot = ThreatIntelligenceChatbot(async_db_manager)
+        chatbot.clear_history()
+        return {"message": "Chat history cleared"}
+    except Exception as e:
+        logger.error(f"Clear chat history error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/chat/train")
+async def train_chatbot():
+    """Train the chatbot on blog content."""
+    try:
+        chatbot = ThreatIntelligenceChatbot(async_db_manager)
+        result = await chatbot.train_on_blog_content()
+        return {"message": result}
+    except Exception as e:
+        logger.error(f"Train chatbot error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Error handlers

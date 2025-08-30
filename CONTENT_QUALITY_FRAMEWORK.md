@@ -903,3 +903,119 @@ TECHNIQUE_PATTERNS = {
 **Last Updated:** August 29, 2024  
 **Next Review:** September 29, 2024  
 **Contact:** CTI Scraper Development Team
+
+# Content Quality Framework
+
+## Overview
+
+The Content Quality Framework ensures that all collected threat intelligence content meets high standards for accuracy, relevance, and usefulness. This framework is particularly important for the AI chatbot, which relies on this content for generating responses.
+
+## Quality Assessment Criteria
+
+### 1. **Content Accuracy (25 points)**
+- **Factual correctness**: Information is accurate and verifiable
+- **Source reliability**: Content comes from reputable sources
+- **Technical precision**: Technical details are correct and up-to-date
+- **Citation quality**: Proper attribution and references
+
+### 2. **Relevance and Timeliness (20 points)**
+- **Current relevance**: Content addresses current threats and trends
+- **Publication date**: Recent content (within 90 days preferred)
+- **Threat landscape alignment**: Content matches current threat landscape
+- **Geographic relevance**: Applicable to target audience
+
+### 3. **Technical Depth (20 points)**
+- **Technical detail**: Sufficient technical information provided
+- **Methodology clarity**: Clear explanation of methods and approaches
+- **Implementation guidance**: Practical implementation details
+- **Code examples**: When applicable, code or configuration examples
+
+### 4. **Actionability (15 points)**
+- **Practical guidance**: Actionable recommendations provided
+- **Mitigation strategies**: Clear mitigation and response strategies
+- **Tool recommendations**: Specific tools and technologies mentioned
+- **Best practices**: Industry best practices included
+
+### 5. **Source Authority (10 points)**
+- **Author expertise**: Author has relevant expertise and credentials
+- **Organization reputation**: Reputable organization or company
+- **Peer review**: Content has been peer-reviewed or validated
+- **Community recognition**: Recognized by the security community
+
+### 6. **Content Structure (10 points)**
+- **Clear organization**: Well-structured and easy to follow
+- **Readability**: Clear writing and good readability
+- **Visual aids**: Charts, diagrams, or other visual elements
+- **Summary sections**: Clear summaries and conclusions
+
+## AI Chatbot Integration
+
+### **Balanced Content-First Approach**
+The AI chatbot is specifically designed to use the collected content with comprehensive summaries:
+
+1. **Balanced Content Adherence**: Responses based on actual collected articles with detailed analysis
+2. **Mandatory Source Attribution**: Always cites source URLs using "According to [URL], [information]"
+3. **Direct Quotations**: Uses quotation marks and cites exact sources
+4. **No Hallucination**: Never makes up information or cites fake sources
+5. **Transparent Limitations**: Clearly states "I don't have information about that in my available content" when appropriate
+6. **Evidence-Based Responses**: Every claim supported by actual collected content
+7. **Comprehensive Summaries**: Provides detailed analysis and insights from available content
+
+### **Quality Scoring Impact**
+Content quality scores directly influence chatbot responses:
+
+- **Higher quality content** gets prioritized in search results
+- **Quality scores** are included in context provided to the model
+- **Source metadata** (author, blog name, research type) enhances responses
+- **Recency bonuses** favor recent, high-quality content
+
+### **Blog Content Prioritization**
+The chatbot specifically prioritizes blog content:
+
+- **Blog content** gets 30% relevance boost
+- **Research content** gets 20% boost
+- **Authored content** gets 10% boost
+- **Quality scores** multiply relevance scores
+
+## Quality Assessment Process
+
+### **Automated Assessment**
+1. **Content extraction** with quality indicators
+2. **Metadata analysis** for source authority
+3. **Technical depth** evaluation
+4. **Relevance scoring** based on keywords and topics
+5. **Timeliness** assessment
+
+### **Manual Review**
+1. **Expert review** of high-value content
+2. **Technical validation** of claims and methods
+3. **Source verification** and authority assessment
+4. **Actionability** evaluation
+5. **Community feedback** integration
+
+## Quality Metrics
+
+### **Scoring System**
+- **Excellent (60+ points)**: Premium content, highly prioritized
+- **Good (45-59 points)**: Quality content, standard priority
+- **Fair (30-44 points)**: Acceptable content, lower priority
+- **Limited (0-29 points)**: Poor quality, minimal priority
+
+### **Continuous Improvement**
+- **Quality trends** monitoring
+- **Source performance** tracking
+- **Content gaps** identification
+- **Quality framework** refinement
+
+## Model-Agnostic Quality
+
+The quality framework works with any LLM model:
+
+1. **Content extraction** is model-independent
+2. **Quality scoring** applies to all models
+3. **Context building** uses the same quality criteria
+4. **Source attribution** works across all models
+5. **Evidence-based responses** are model-agnostic
+6. **Balanced content guidelines** apply universally
+
+This ensures consistent, high-quality, hallucination-free responses regardless of which model is used.
