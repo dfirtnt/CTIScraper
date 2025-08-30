@@ -17,6 +17,7 @@
 - [Configuration](#configuration)
 - [Usage](#usage)
 - [API Documentation](#api-documentation)
+- [Documentation](#documentation)
 - [Security](#security)
 - [Contributing](#contributing)
 - [License](#license)
@@ -268,6 +269,39 @@ GET /api/chat/history        # Get conversation history
 POST /api/chat/clear         # Clear conversation history
 ```
 
+## 📖 Documentation
+
+### **Core Documentation**
+- **[README.md](README.md)** - This file - Project overview, installation, and quick start
+- **[CHANGELOG.md](CHANGELOG.md)** - Version history, release notes, and migration guides
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Development setup, coding standards, and contribution guidelines
+- **[SECURITY.md](.github/SECURITY.md)** - Security policy, vulnerability reporting, and best practices
+
+### **Development & Testing**
+- **[TESTING_GUIDE.md](TESTING_GUIDE.md)** - Comprehensive testing instructions and best practices
+- **[TESTING_SUMMARY.md](TESTING_SUMMARY.md)** - Test results, coverage reports, and quality metrics
+- **[MANUAL_TEST_CHECKLIST.md](MANUAL_TEST_CHECKLIST.md)** - Manual testing procedures and validation steps
+- **[pytest.ini](pytest.ini)** - Pytest configuration and test settings
+
+### **Content Quality & Analysis**
+- **[CONTENT_QUALITY_FRAMEWORK.md](CONTENT_QUALITY_FRAMEWORK.md)** - Content quality assessment framework and scoring methodology
+- **[STRICT_CONTENT_GUIDELINES.md](STRICT_CONTENT_GUIDELINES.md)** - Content filtering rules and quality standards
+
+### **Project Management**
+- **[GITHUB_READY_SUMMARY.md](GITHUB_READY_SUMMARY.md)** - Summary of GitHub-ready improvements and security enhancements
+- **[CLEANUP_SUMMARY.md](CLEANUP_SUMMARY.md)** - Data cleanup procedures and maintenance tasks
+
+### **Configuration Files**
+- **[env.example](env.example)** - Environment variables template with placeholder values
+- **[requirements.txt](requirements.txt)** - Production dependencies with pinned versions
+- **[requirements-test.txt](requirements-test.txt)** - Development and testing dependencies
+- **[docker-compose.yml](docker-compose.yml)** - Production Docker orchestration
+- **[docker-compose.test.yml](docker-compose.test.yml)** - Testing environment configuration
+
+### **Development Tools**
+- **[run_tests.py](run_tests.py)** - Automated test runner with coverage reporting
+- **[setup_ollama_docker.sh](setup_ollama_docker.sh)** - Ollama Docker setup for local LLM models
+
 ## 🔒 Security
 
 ### **Built-in Security Features**
@@ -342,7 +376,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Port Conflicts**: Ensure ports 8000, 5432, 6379 are available
 - **Permission Issues**: Check file permissions and ownership
 
-## 🏆 Acknowledgments
+## �� Acknowledgments
 
 - **Contributors**: All who have contributed to this project
 - **Open Source**: Built on amazing open source technologies
