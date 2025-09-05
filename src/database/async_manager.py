@@ -199,6 +199,8 @@ class AsyncDatabaseManager:
                     name=source_data.name,
                     url=source_data.url,
                     rss_url=source_data.rss_url,
+                    tier=getattr(source_data, 'tier', 3),
+                    weight=getattr(source_data, 'weight', 1.0),
                     check_frequency=source_data.check_frequency,
                     active=source_data.active,
                     config=source_data.config.dict() if source_data.config else {},
@@ -232,6 +234,23 @@ class AsyncDatabaseManager:
                 
         except Exception as e:
             logger.error(f"Failed to get source {source_id}: {e}")
+            return None
+    
+    async def get_source_by_identifier(self, identifier: str) -> Optional[Source]:
+        """Get a source by its identifier."""
+        try:
+            async with self.get_session() as session:
+                result = await session.execute(
+                    select(SourceTable).where(SourceTable.identifier == identifier)
+                )
+                db_source = result.scalar_one_or_none()
+                
+                if db_source:
+                    return self._db_source_to_model(db_source)
+                return None
+                
+        except Exception as e:
+            logger.error(f"Failed to get source by identifier {identifier}: {e}")
             return None
     
     async def update_source(self, source_id: int, update_data: SourceUpdate) -> Optional[Source]:
@@ -612,6 +631,8 @@ class AsyncDatabaseManager:
             name=db_source.name,
             url=db_source.url,
             rss_url=db_source.rss_url,
+            tier=getattr(db_source, 'tier', 3),
+            weight=getattr(db_source, 'weight', 1.0),
             check_frequency=db_source.check_frequency,
             active=db_source.active,
             config=SourceConfig.parse_obj(config_dict),

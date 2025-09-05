@@ -24,6 +24,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from pydantic import BaseModel, HttpUrl
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
@@ -39,6 +40,9 @@ from src.worker.celery_app import test_source_connectivity, collect_from_source
 from src.utils.search_parser import parse_boolean_search, get_search_help_text
 from src.utils.ioc_extractor import HybridIOCExtractor, IOCExtractionResult
 from src.utils.behavior_extractor import SecureBERTBehaviorExtractor, BehaviorExtractionResult
+from src.core.rss_parser import RSSParser
+from src.core.modern_scraper import ModernScraper
+from src.utils.http import HTTPClient
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -50,6 +54,22 @@ OLLAMA_MODEL_MAPPING = {
     'llama3.1': 'llama3.1:8b',
     'codellama': 'codellama:7b'
 }
+
+# URL Submission Models
+class URLSubmissionRequest(BaseModel):
+    url: HttpUrl
+    name: Optional[str] = None
+    description: Optional[str] = None
+    check_frequency: int = 3600  # Default 1 hour
+    collection_days: int = 90  # Default 90 days
+
+class URLSubmissionResponse(BaseModel):
+    success: bool
+    message: str
+    source_id: Optional[int] = None
+    source_name: Optional[str] = None
+    articles_collected: Optional[int] = None
+    errors: Optional[List[str]] = None
 
 def get_ollama_model(frontend_model: str) -> str:
     """Get the Ollama model name from frontend model selection."""
@@ -379,6 +399,152 @@ async def api_toggle_source_status(source_id: int, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/sources/submit-url", response_model=URLSubmissionResponse)
+async def api_submit_url(request: URLSubmissionRequest, background_tasks: BackgroundTasks):
+    """Submit a URL for blog ingestion and create a new source."""
+    try:
+        url_str = str(request.url)
+        logger.info(f"URL submission request for: {url_str}")
+        
+        # Generate source name if not provided
+        if not request.name:
+            from urllib.parse import urlparse
+            parsed_url = urlparse(url_str)
+            request.name = f"User Submitted: {parsed_url.netloc}"
+        
+        # Generate unique identifier
+        import hashlib
+        identifier = f"user_submitted_{hashlib.md5(url_str.encode()).hexdigest()[:8]}"
+        
+        # Check if source already exists
+        existing_source = await async_db_manager.get_source_by_identifier(identifier)
+        if existing_source:
+            return URLSubmissionResponse(
+                success=False,
+                message="A source for this URL already exists",
+                errors=[f"Source '{existing_source.name}' already exists for this URL"]
+            )
+        
+        # Create source configuration
+        from src.models.source import SourceCreate, SourceConfig
+        from urllib.parse import urlparse
+        
+        parsed_url = urlparse(url_str)
+        
+        # Basic configuration for web scraping
+        config = SourceConfig(
+            allow=[parsed_url.netloc],
+            post_url_regex=[f"^{parsed_url.scheme}://{parsed_url.netloc}/.*"],
+            robots={
+                "enabled": True,
+                "user_agent": "CTIScraper/2.0",
+                "respect_delay": True,
+                "max_requests_per_minute": 5,
+                "crawl_delay": 2.0
+            },
+            extract={
+                "prefer_jsonld": True,
+                "title_selectors": ["h1", "meta[property='og:title']::attr(content)", "title"],
+                "date_selectors": [
+                    "meta[property='article:published_time']::attr(content)",
+                    "meta[name='article:published_time']::attr(content)",
+                    "time[datetime]::attr(datetime)",
+                    ".published-date",
+                    ".date"
+                ],
+                "body_selectors": [
+                    "article",
+                    "main",
+                    ".content",
+                    ".post-content",
+                    ".blog-content",
+                    ".entry-content"
+                ],
+                "author_selectors": [
+                    ".author-name",
+                    ".byline",
+                    "meta[name='author']::attr(content)",
+                    ".author"
+                ]
+            },
+            collection_days=request.collection_days
+        )
+        
+        # Create source
+        source_data = SourceCreate(
+            identifier=identifier,
+            name=request.name,
+            url=url_str,
+            rss_url=None,  # Will be discovered if available
+            check_frequency=request.check_frequency,
+            active=True,
+            config=config
+        )
+        
+        # Save to database
+        new_source = await async_db_manager.create_source(source_data)
+        if not new_source:
+            return URLSubmissionResponse(
+                success=False,
+                message="Failed to create source in database",
+                errors=["Database error occurred"]
+            )
+        
+        # Try to discover RSS feed
+        rss_url = None
+        try:
+            async with HTTPClient() as http_client:
+                # Try common RSS feed paths
+                common_rss_paths = [
+                    "/feed/",
+                    "/rss/",
+                    "/rss.xml",
+                    "/feed.xml",
+                    "/atom.xml",
+                    "/feeds/posts/default",
+                    "/blog/feed/",
+                    "/blog/rss/"
+                ]
+                
+                for path in common_rss_paths:
+                    try:
+                        test_url = f"{parsed_url.scheme}://{parsed_url.netloc}{path}"
+                        response = await http_client.get(test_url, timeout=5.0)
+                        if response.status_code == 200:
+                            content_type = response.headers.get('content-type', '').lower()
+                            if 'xml' in content_type or 'rss' in content_type or 'atom' in content_type:
+                                rss_url = test_url
+                                logger.info(f"Discovered RSS feed: {rss_url}")
+                                break
+                    except Exception:
+                        continue
+        except Exception as e:
+            logger.warning(f"RSS discovery failed: {e}")
+        
+        # Update source with RSS URL if found
+        if rss_url:
+            from src.models.source import SourceUpdate
+            update_data = SourceUpdate(rss_url=rss_url)
+            await async_db_manager.update_source(new_source.id, update_data)
+        
+        # Trigger immediate collection in background
+        background_tasks.add_task(collect_from_source.delay, new_source.id)
+        
+        return URLSubmissionResponse(
+            success=True,
+            message=f"Source '{request.name}' created successfully and collection started",
+            source_id=new_source.id,
+            source_name=request.name,
+            articles_collected=0
+        )
+        
+    except Exception as e:
+        logger.error(f"URL submission error: {e}")
+        return URLSubmissionResponse(
+            success=False,
+            message="Failed to process URL submission",
+            errors=[str(e)]
+        )
 
 @app.get("/api/sources/{source_id}/stats")
 async def api_source_stats(source_id: int):

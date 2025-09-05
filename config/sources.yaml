@@ -180,6 +180,46 @@ sources:
         body_selectors: ["article", "main", ".content", ".post-content"]
     description: "Detection-focused research with hunting queries"
 
+  # Picus Security Blog
+  - id: "picus_security_blog"
+    name: "Picus Security Blog"
+    url: "https://www.picussecurity.com/resource/blog"
+    rss_url: null  # No RSS feed available
+    check_frequency: 3600  # 1 hour - web scraping only
+    active: true
+    config:
+      allow: ["picussecurity.com"]
+      post_url_regex: ["^https://www\\.picussecurity\\.com/resource/blog/.*"]
+      robots:
+        enabled: true
+        user_agent: "CTIScraper/2.0"
+        respect_delay: true
+        max_requests_per_minute: 5
+        crawl_delay: 3.0
+      extract:
+        prefer_jsonld: false  # No structured data available
+        title_selectors: 
+          - "h1 span#hs_cos_wrapper_name"
+          - "h1"
+          - "meta[property='og:title']::attr(content)"
+          - "title"
+        date_selectors: 
+          - "meta[property='article:published_time']::attr(content)"
+          - "meta[name='article:published_time']::attr(content)"
+          - "time[datetime]::attr(datetime)"
+          - ".published-date"
+        body_selectors: 
+          - ".hs_cos_wrapper_type_rich_text"
+          - ".blog-content"
+          - "article"
+          - "main"
+          - ".content"
+        author_selectors: 
+          - ".author-name"
+          - ".byline"
+          - "meta[name='author']::attr(content)"
+    description: "Security validation and breach simulation research with APT analysis"
+
   # Check Point Research
   - id: "checkpoint_research"
     name: "Check Point Research"

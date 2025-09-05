@@ -315,6 +315,86 @@
     </div>
     {% endif %}
 
+    <!-- URL Submission Form -->
+    <div class="bg-white rounded-lg shadow-sm p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">📝 Submit New Blog URL</h3>
+        <p class="text-sm text-gray-600 mb-4">Add a new threat intelligence blog or security news source for automatic ingestion.</p>
+        
+        <form id="urlSubmissionForm" class="space-y-4">
+            <div>
+                <label for="blogUrl" class="block text-sm font-medium text-gray-700 mb-2">Blog URL *</label>
+                <input type="url" id="blogUrl" name="url" required 
+                       placeholder="https://example.com/blog" 
+                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                <p class="text-xs text-gray-500 mt-1">Enter the main URL of the blog or security news site</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="sourceName" class="block text-sm font-medium text-gray-700 mb-2">Source Name</label>
+                    <input type="text" id="sourceName" name="name" 
+                           placeholder="Auto-generated from URL" 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                    <p class="text-xs text-gray-500 mt-1">Optional: Custom name for this source</p>
+                </div>
+                
+                <div>
+                    <label for="description" class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                    <input type="text" id="description" name="description" 
+                           placeholder="Brief description of the source" 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                    <p class="text-xs text-gray-500 mt-1">Optional: Brief description</p>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="checkFrequency" class="block text-sm font-medium text-gray-700 mb-2">Check Frequency</label>
+                    <select id="checkFrequency" name="check_frequency" 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                        <option value="1800">Every 30 minutes</option>
+                        <option value="3600" selected>Every hour</option>
+                        <option value="7200">Every 2 hours</option>
+                        <option value="14400">Every 4 hours</option>
+                        <option value="86400">Daily</option>
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1">How often to check for new articles</p>
+                </div>
+                
+                <div>
+                    <label for="collectionDays" class="block text-sm font-medium text-gray-700 mb-2">Historical Collection</label>
+                    <select id="collectionDays" name="collection_days" 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                        <option value="30">30 days</option>
+                        <option value="60">60 days</option>
+                        <option value="90" selected>90 days</option>
+                        <option value="180">180 days</option>
+                        <option value="365">1 year</option>
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1">How far back to collect articles</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center justify-end space-x-3">
+                <button type="button" onclick="resetUrlForm()" 
+                        class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    Reset
+                </button>
+                <button type="submit" 
+                        class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    <span id="submitButtonText">Submit URL</span>
+                    <span id="submitButtonSpinner" class="hidden">
+                        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Processing...
+                    </span>
+                </button>
+            </div>
+        </form>
+    </div>
+
     <!-- Quick Actions -->
     <div class="bg-white rounded-lg shadow-sm p-6">
         <h3 class="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
@@ -593,5 +673,101 @@ document.getElementById('resultModal').addEventListener('click', function(e) {
         closeModal();
     }
 });
+
+// URL Submission Form Handling
+document.getElementById('urlSubmissionForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const submitButton = this.querySelector('button[type="submit"]');
+    const submitText = document.getElementById('submitButtonText');
+    const submitSpinner = document.getElementById('submitButtonSpinner');
+    
+    // Show loading state
+    submitButton.disabled = true;
+    submitText.classList.add('hidden');
+    submitSpinner.classList.remove('hidden');
+    
+    try {
+        const requestData = {
+            url: formData.get('url'),
+            name: formData.get('name') || null,
+            description: formData.get('description') || null,
+            check_frequency: parseInt(formData.get('check_frequency')),
+            collection_days: parseInt(formData.get('collection_days'))
+        };
+        
+        const response = await fetch('/api/sources/submit-url', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            let content = `<div class="space-y-3">`;
+            content += `<p><strong>Source Created:</strong> ${result.source_name}</p>`;
+            content += `<p><strong>Source ID:</strong> ${result.source_id}</p>`;
+            content += `<p><strong>Status:</strong> <span class="text-green-600">Active</span></p>`;
+            content += `<p><strong>Message:</strong> ${result.message}</p>`;
+            
+            if (result.articles_collected !== undefined) {
+                content += `<p><strong>Articles Collected:</strong> ${result.articles_collected}</p>`;
+            }
+            
+            content += `<div class="mt-4 p-3 bg-green-50 border border-green-200 rounded">`;
+            content += `<p class="text-sm text-green-800">✅ Source added successfully! Collection has started in the background.</p>`;
+            content += `<p class="text-xs text-green-700 mt-1">The page will refresh in 3 seconds to show the new source.</p>`;
+            content += `</div>`;
+            content += `</div>`;
+            
+            showModal('URL Submitted Successfully', content);
+            
+            // Reset form
+            resetUrlForm();
+            
+            // Auto-refresh page after 3 seconds
+            setTimeout(() => {
+                window.location.reload();
+            }, 3000);
+            
+        } else {
+            let content = `<div class="space-y-3">`;
+            content += `<p class="text-red-600"><strong>Submission Failed:</strong> ${result.message}</p>`;
+            
+            if (result.errors && result.errors.length > 0) {
+                content += `<div class="mt-3">`;
+                content += `<p class="text-sm font-medium text-gray-700">Errors:</p>`;
+                content += `<ul class="text-sm text-red-600 list-disc list-inside">`;
+                result.errors.forEach(error => {
+                    content += `<li>${error}</li>`;
+                });
+                content += `</ul>`;
+                content += `</div>`;
+            }
+            content += `</div>`;
+            
+            showModal('URL Submission Failed', content);
+        }
+        
+    } catch (error) {
+        showModal('Submission Error', `<p class="text-red-600">Error submitting URL: ${error.message}</p>`);
+    } finally {
+        // Reset button state
+        submitButton.disabled = false;
+        submitText.classList.remove('hidden');
+        submitSpinner.classList.add('hidden');
+    }
+});
+
+function resetUrlForm() {
+    document.getElementById('urlSubmissionForm').reset();
+    // Reset to default values
+    document.getElementById('checkFrequency').value = '3600';
+    document.getElementById('collectionDays').value = '90';
+}
 </script>
 {% endblock %}
