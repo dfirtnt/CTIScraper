@@ -223,26 +223,9 @@ class ContentProcessor:
                         headings.extend([tag.get_text(strip=True) for tag in h_tags])
                 enhanced['headings'] = headings[:10]  # Limit to 10 headings
             
-            # Extract date information
-            if article.published_at:
-                enhanced['publication_day_of_week'] = article.published_at.strftime('%A')
-                enhanced['publication_month'] = article.published_at.strftime('%B')
-                enhanced['publication_year'] = article.published_at.year
-                
-                # Calculate age - handle timezone differences
-                try:
-                    if article.published_at.tzinfo is not None:
-                        # If published_at is timezone-aware, make current time timezone-aware too
-                        current_time = datetime.now(article.published_at.tzinfo)
-                    else:
-                        # If published_at is naive, use naive current time
-                        current_time = datetime.utcnow()
-                    
-                    age_days = (current_time - article.published_at).days
-                    enhanced['age_days'] = age_days
-                except Exception as e:
-                    # Fallback: just use days from utcnow, ignoring timezone
-                    enhanced['age_days'] = 0
+            # Extract date information - REMOVED redundant publication metadata
+            # The published_at field already contains this information
+            # No need to duplicate it in metadata
             
             # Content analysis
             text_content = ContentCleaner.html_to_text(article.content).lower()

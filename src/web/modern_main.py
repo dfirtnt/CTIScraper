@@ -17,7 +17,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Request
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -742,6 +742,84 @@ async def api_get_article(article_id: int):
         logger.error(f"API get article error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/articles/{article_id}/export-markdown")
+async def api_export_article_markdown(article_id: int):
+    """API endpoint for exporting an article to Markdown format."""
+    try:
+        article = await async_db_manager.get_article(article_id)
+        if not article:
+            raise HTTPException(status_code=404, detail="Article not found")
+        
+        # Get source information
+        source = await async_db_manager.get_source(article.source_id) if article.source_id else None
+        
+        # Build markdown content
+        classification = article.metadata.get('classification', 'Unclassified') if article.metadata else 'Unclassified'
+        
+        markdown_content = f"""# {article.title}
+
+**Source:** {source.name if source else article.source_id}  
+**URL:** {article.canonical_url or 'N/A'}  
+**Published:** {article.published_at.strftime('%Y-%m-%d %H:%M:%S') if article.published_at else 'N/A'}  
+**Article ID:** {article.id}  
+**Classification:** {classification}  
+
+---
+
+## Content
+
+{article.content}
+
+---
+
+## Metadata
+
+"""
+        
+        # Add metadata if available
+        if article.metadata:
+            markdown_content += "### AI Analysis\n\n"
+            
+            # Add ChatGPT summary if available
+            if 'chatgpt_summary' in article.metadata:
+                summary_data = article.metadata['chatgpt_summary']
+                markdown_content += f"**AI Summary:**\n{summary_data.get('summary', 'N/A')}\n\n"
+                markdown_content += f"**Model Used:** {summary_data.get('model_name', 'N/A')}\n\n"
+            
+            # Add threat hunting score if available
+            if 'threat_hunting_score' in article.metadata:
+                score = article.metadata['threat_hunting_score']
+                markdown_content += f"**Threat Hunting Score:** {score}\n\n"
+            
+            # Add SIGMA rules if available
+            if 'sigma_rules' in article.metadata:
+                sigma_data = article.metadata['sigma_rules']
+                markdown_content += f"**SIGMA Rules:**\n```yaml\n{sigma_data.get('rules', 'N/A')}\n```\n\n"
+            
+            # Add IOCs if available
+            if 'iocs' in article.metadata:
+                iocs_data = article.metadata['iocs']
+                markdown_content += "**Indicators of Compromise:**\n\n"
+                for ioc_type, iocs in iocs_data.items():
+                    if iocs:
+                        markdown_content += f"**{ioc_type.title()}:**\n"
+                        for ioc in iocs:
+                            markdown_content += f"- {ioc}\n"
+                        markdown_content += "\n"
+        
+        # Return as markdown
+        return Response(
+            content=markdown_content,
+            media_type="text/markdown",
+            headers={"Content-Disposition": f"attachment; filename=article-{article_id}.md"}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"API export markdown error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/articles/{article_id}/classify")
 async def api_classify_article(article_id: int, request: Request):
     """API endpoint for classifying an article."""
@@ -1036,64 +1114,8 @@ async def api_chatgpt_summary(article_id: int, request: Request):
         if len(article.content) > content_limit:
             content += f"\n\n[Content truncated at {content_limit:,} characters. Full article has {len(article.content):,} characters.]"
         
-        # Comprehensive summary prompt
-        prompt = f"""You are a threat intelligence summarization specialist. Your task is to create concise summaries that preserve all technical details needed for threat hunting while removing irrelevant content.
-
-**PRESERVE (Keep Exactly):**
-- Command-line strings, parameters, and arguments
-- Process names, file paths, and execution chains
-- Registry keys, values, and modification patterns
-- Network indicators (domains, IPs, URLs, ports)
-- File hashes, names, and locations
-- Service names and scheduled task details
-- Windows Event IDs and log sources
-- Specific malware families and tool names
-- Attack technique descriptions and TTPs
-- Timeline information and campaign details
-
-**REMOVE (Discard Completely):**
-- Author biographical information
-- Company announcements and marketing content
-- Conference details and speaking engagements
-- General industry trends and opinions
-- Methodology explanations and research process
-- Acknowledgments and credits
-- Unrelated news and current events
-- Background context beyond 2-3 sentences
-
-**OUTPUT FORMAT:**
-**Technical Summary:** [2-3 sentences describing the core threat/technique]
-
-**Key TTPs:**
-- [Specific technique with technical details]
-- [Another technique with observables]
-
-**Technical Indicators:**
-- Commands: [exact strings]
-- Processes: [parent → child relationships]
-- Network: [domains, IPs, URL patterns, user-agent]
-- Files: [paths, hashes, names]
-- Registry: [keys and values]
-
-**Source:** [URL if provided]
-
-**INSTRUCTIONS:**
-- Maximum 500 words total
-- Preserve ALL technical strings exactly as written and include surrounding context.
-- Remove all non-technical narrative
-- Focus on actionable intelligence for threat hunters
-- If content lacks technical details, state "Insufficient technical detail for threat hunting"
-
----
-
-**ARTICLE TO SUMMARIZE:**
-
-Title: {article.title}
-Source URL: {article.canonical_url or 'N/A'}
-Published Date: {article.published_at or 'N/A'}
-
-Content:
-{content}"""
+        # Simple test prompt for debugging
+        prompt = f"Summarize this cybersecurity article in 2-3 sentences:\n\nTitle: {article.title}\nContent: {content}"
         
         # Use the selected model
         if ai_model == 'chatgpt':
@@ -1142,32 +1164,34 @@ Content:
             ollama_url = os.getenv('LLM_API_URL', 'http://cti_ollama:11434')
             ollama_model = get_ollama_model(ai_model)
             
+            import requests
+            
             logger.info(f"Using Ollama at {ollama_url} with model {ollama_model}")
             
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{ollama_url}/api/generate",
-                    json={
-                        "model": ollama_model,
-                        "prompt": f"You are a cybersecurity expert specializing in threat intelligence analysis. Provide clear, concise summaries of threat intelligence articles.\n\n{prompt}",
-                        "stream": False,
-                        "options": {
-                            "temperature": 0.3,
-                            "num_predict": 2048
-                        }
-                    },
-                    timeout=30.0
-                )
+            # Use requests instead of httpx for Ollama
+            response = requests.post(
+                f"{ollama_url}/api/generate",
+                json={
+                    "model": ollama_model,
+                    "prompt": f"You are a cybersecurity expert specializing in threat intelligence analysis. Provide clear, concise summaries of threat intelligence articles.\n\n{prompt}",
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.3,
+                        "num_predict": 512  # Reduce output length
+                    }
+                },
+                timeout=120.0  # Increase timeout to 2 minutes
+            )
+            
+            if response.status_code != 200:
+                error_detail = f"Failed to get summary from Ollama: {response.status_code}"
+                logger.error(f"Ollama API error: {response.status_code}, response: {response.text}")
+                raise HTTPException(status_code=500, detail=error_detail)
                 
-                if response.status_code != 200:
-                    error_detail = f"Failed to get summary from Ollama: {response.status_code}"
-                    logger.error(f"Ollama API error: {response.status_code}, response: {response.text}")
-                    raise HTTPException(status_code=500, detail=error_detail)
-                
-                result = response.json()
-                summary = result.get('response', '')
-                model_name = ollama_model
-                model_used = "ollama"
+            result = response.json()
+            summary = result.get('response', '')
+            model_name = ollama_model
+            model_used = "ollama"
         
         # Store the summary in article metadata
         current_metadata = article.metadata.copy() if article.metadata else {}
@@ -1196,7 +1220,7 @@ Content:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"API ChatGPT summary error: {e}")
+        logger.error(f"API ChatGPT summary error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/articles/{article_id}/custom-prompt")
