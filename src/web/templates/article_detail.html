@@ -1304,6 +1304,28 @@
                     ${data?.cached ? ' | <span class="font-medium text-blue-600">(Cached)</span>' : ''}
                 </div>
                 
+                ${data?.behavior_extraction ? `
+                <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <h4 class="font-medium text-blue-900 mb-2">🧠 SecureBERT Behavior Analysis</h4>
+                    <div class="text-sm text-blue-800 space-y-1">
+                        <div><strong>Method:</strong> ${data.behavior_extraction.extraction_method}</div>
+                        <div><strong>Processing Time:</strong> ${data.behavior_extraction.processing_time.toFixed(2)}s</div>
+                        <div><strong>Techniques Found:</strong> ${data.behavior_extraction.techniques.length}</div>
+                        <div><strong>Tools Identified:</strong> ${data.behavior_extraction.tools.length}</div>
+                        <div><strong>Behaviors Detected:</strong> ${data.behavior_extraction.behaviors.length}</div>
+                    </div>
+                    ${data.behavior_extraction.techniques.length > 0 ? `
+                    <details class="mt-2">
+                        <summary class="cursor-pointer text-blue-700 hover:text-blue-900">View Extracted Techniques</summary>
+                        <ul class="mt-1 text-xs text-blue-600 list-disc list-inside">
+                            ${data.behavior_extraction.techniques.slice(0, 5).map(tech => `<li>${tech}</li>`).join('')}
+                            ${data.behavior_extraction.techniques.length > 5 ? `<li>... and ${data.behavior_extraction.techniques.length - 5} more</li>` : ''}
+                        </ul>
+                    </details>
+                    ` : ''}
+                </div>
+                ` : ''}
+                
                 <div class="bg-gray-50 p-4 rounded-lg max-h-96 overflow-y-auto">
                     <pre class="text-sm font-mono whitespace-pre-wrap text-gray-800">${sigmaRules}</pre>
                 </div>

@@ -36,10 +36,22 @@ from src.models.article import Article, ArticleUpdate
 from src.worker.celery_app import test_source_connectivity, collect_from_source
 from src.utils.search_parser import parse_boolean_search, get_search_help_text
 from src.utils.ioc_extractor import HybridIOCExtractor, IOCExtractionResult
+from src.utils.behavior_extractor import SecureBERTBehaviorExtractor, BehaviorExtractionResult
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Model mapping for Ollama models
+OLLAMA_MODEL_MAPPING = {
+    'mistral': 'mistral:7b',
+    'llama3.1': 'llama3.1:8b',
+    'codellama': 'codellama:7b'
+}
+
+def get_ollama_model(frontend_model: str) -> str:
+    """Get the Ollama model name from frontend model selection."""
+    return OLLAMA_MODEL_MAPPING.get(frontend_model, 'mistral:7b')
 
 # Templates
 templates = Jinja2Templates(directory="src/web/templates")
@@ -894,8 +906,9 @@ async def api_chatgpt_summary(article_id: int, request: Request):
         include_content = body.get('include_content', True)  # Default to full content
         api_key = body.get('api_key')  # Get API key from request
         force_regenerate = body.get('force_regenerate', False)  # Force regeneration
+        ai_model = body.get('ai_model', 'chatgpt')  # Get AI model from request
         
-        logger.info(f"ChatGPT summary request for article {article_id}, api_key provided: {bool(api_key)}, force_regenerate: {force_regenerate}")
+        logger.info(f"ChatGPT summary request for article {article_id}, api_key provided: {bool(api_key)}, force_regenerate: {force_regenerate}, model: {ai_model}")
         
         # If force regeneration is requested, skip cache check
         if not force_regenerate:
@@ -914,16 +927,25 @@ async def api_chatgpt_summary(article_id: int, request: Request):
                     "cached": True
                 }
         
-        # Check if API key is provided
-        if not api_key:
-            raise HTTPException(status_code=400, detail="OpenAI API key is required. Please configure it in Settings.")
+        # Determine which model to use
+        if ai_model == 'chatgpt':
+            # Check if API key is provided for ChatGPT
+            if not api_key:
+                raise HTTPException(status_code=400, detail="OpenAI API key is required. Please configure it in Settings.")
+        else:
+            # Use Ollama model - no API key required
+            api_key = None
         
         # Prepare the summary prompt
         if include_content:
             # Smart content truncation based on model
-            # Using ChatGPT - can handle more content
-            # GPT-4 Turbo: ~50k chars, GPT-4: ~20k chars, GPT-3.5: ~15k chars
-            content_limit = int(os.getenv('CHATGPT_CONTENT_LIMIT', '20000'))
+            if ai_model == 'chatgpt':
+                # ChatGPT can handle more content
+                # GPT-4 Turbo: ~50k chars, GPT-4: ~20k chars, GPT-3.5: ~15k chars
+                content_limit = int(os.getenv('CHATGPT_CONTENT_LIMIT', '20000'))
+            else:
+                # Ollama models have more limited context
+                content_limit = int(os.getenv('OLLAMA_CONTENT_LIMIT', '8000'))
             
             # Truncate content intelligently
             content = article.content[:content_limit]
@@ -962,45 +984,78 @@ Content Length: {len(article.content)} characters
 
 Based on the title, source, and metadata, please provide a brief assessment of what this article likely covers and its potential importance for security professionals."""
         
-        # Use ChatGPT API with provided key
-        chatgpt_api_url = os.getenv('CHATGPT_API_URL', 'https://api.openai.com/v1/chat/completions')
-        
-        # Use ChatGPT API
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                chatgpt_api_url,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": "gpt-4",  # or your specific ChatGPT model
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "You are a cybersecurity expert specializing in threat intelligence analysis. Provide clear, concise summaries of threat intelligence articles."
-                        },
-                        {
-                            "role": "user",
-                            "content": prompt
+        # Use the selected model
+        if ai_model == 'chatgpt':
+            # Use ChatGPT API
+            chatgpt_api_url = os.getenv('CHATGPT_API_URL', 'https://api.openai.com/v1/chat/completions')
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    chatgpt_api_url,
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "gpt-4",  # or your specific ChatGPT model
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "You are a cybersecurity expert specializing in threat intelligence analysis. Provide clear, concise summaries of threat intelligence articles."
+                            },
+                            {
+                                "role": "user",
+                                "content": prompt
+                            }
+                        ],
+                        "max_tokens": 2048,
+                        "temperature": 0.3
+                    },
+                    timeout=60.0
+                )
+                
+                if response.status_code != 200:
+                    error_detail = f"Failed to get summary from ChatGPT: {response.status_code}"
+                    if response.status_code == 401:
+                        error_detail = "Invalid API key. Please check your OpenAI API key in Settings."
+                    elif response.status_code == 429:
+                        error_detail = "Rate limit exceeded. Please try again later."
+                    raise HTTPException(status_code=500, detail=error_detail)
+                
+                result = response.json()
+                summary = result['choices'][0]['message']['content']
+                model_name = "gpt-4"
+                model_used = "chatgpt"
+        else:
+            # Use Ollama API
+            ollama_url = os.getenv('LLM_API_URL', 'http://cti_ollama:11434')
+            ollama_model = get_ollama_model(ai_model)
+            
+            logger.info(f"Using Ollama at {ollama_url} with model {ollama_model}")
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{ollama_url}/api/generate",
+                    json={
+                        "model": ollama_model,
+                        "prompt": f"You are a cybersecurity expert specializing in threat intelligence analysis. Provide clear, concise summaries of threat intelligence articles.\n\n{prompt}",
+                        "stream": False,
+                        "options": {
+                            "temperature": 0.3,
+                            "num_predict": 2048
                         }
-                    ],
-                    "max_tokens": 2048,
-                    "temperature": 0.3
-                },
-                timeout=60.0
-            )
-            
-            if response.status_code != 200:
-                error_detail = f"Failed to get summary from ChatGPT: {response.status_code}"
-                if response.status_code == 401:
-                    error_detail = "Invalid API key. Please check your OpenAI API key in Settings."
-                elif response.status_code == 429:
-                    error_detail = "Rate limit exceeded. Please try again later."
-                raise HTTPException(status_code=500, detail=error_detail)
-            
-            result = response.json()
-            summary = result['choices'][0]['message']['content']
+                    },
+                    timeout=120.0
+                )
+                
+                if response.status_code != 200:
+                    error_detail = f"Failed to get summary from Ollama: {response.status_code}"
+                    raise HTTPException(status_code=500, detail=error_detail)
+                
+                result = response.json()
+                summary = result.get('response', '')
+                model_name = ollama_model
+                model_used = "ollama"
         
         # Store the summary in article metadata
         current_metadata = article.metadata.copy() if article.metadata else {}
@@ -1008,8 +1063,8 @@ Based on the title, source, and metadata, please provide a brief assessment of w
             'summary': summary,
             'summarized_at': datetime.now().isoformat(),
             'content_type': 'full content' if include_content else 'metadata only',
-            'model_used': 'chatgpt',
-            'model_name': 'gpt-4'
+            'model_used': model_used,
+            'model_name': model_name
         }
         
         # Update the article
@@ -1274,31 +1329,57 @@ async def api_generate_sigma(article_id: int, request: Request):
         include_content = body.get('include_content', True)  # Default to full content
         api_key = body.get('api_key')  # Get API key from request
         author_name = body.get('author_name', 'CTIScraper User')  # Get author name from request
+        ai_model = body.get('ai_model', 'chatgpt')  # Get AI model from request
         
-        logger.info(f"SIGMA generation request for article {article_id}, api_key provided: {bool(api_key)}, author: {author_name}")
+        logger.info(f"SIGMA generation request for article {article_id}, api_key provided: {bool(api_key)}, author: {author_name}, model: {ai_model}")
         
-        if not api_key:
-            logger.warning(f"SIGMA generation failed: No API key provided for article {article_id}")
-            raise HTTPException(status_code=400, detail="OpenAI API key is required. Please configure it in Settings.")
+        # Determine which model to use
+        if ai_model == 'chatgpt':
+            # Check if API key is provided for ChatGPT
+            if not api_key:
+                logger.warning(f"SIGMA generation failed: No API key provided for article {article_id}")
+                raise HTTPException(status_code=400, detail="OpenAI API key is required. Please configure it in Settings.")
+        else:
+            # Use Ollama model - no API key required
+            api_key = None
         
         # Prepare the SIGMA generation prompt
         if include_content:
             # Smart content truncation for SIGMA generation - much more conservative
-            content_limit = int(os.getenv('CHATGPT_CONTENT_LIMIT', '8000'))  # Reduced from 20000
+            if ai_model == 'chatgpt':
+                content_limit = int(os.getenv('CHATGPT_CONTENT_LIMIT', '8000'))  # Reduced from 20000
+            else:
+                # Ollama models have more limited context
+                content_limit = int(os.getenv('OLLAMA_CONTENT_LIMIT', '4000'))
             
             # Truncate content intelligently
             content = article.content[:content_limit]
             if len(article.content) > content_limit:
                 content += f"\n\n[Content truncated at {content_limit:,} characters. Full article has {len(article.content):,} characters.]"
             
-            # Enhanced SIGMA-specific prompt based on SigmaHQ best practices - simplified
+            # Extract attacker behaviors using SecureBERT for more focused SIGMA generation
+            logger.info(f"Extracting attacker behaviors for article {article_id}")
+            behavior_extractor = SecureBERTBehaviorExtractor()
+            behavior_result = behavior_extractor.extract_behaviors(content, article.title)
+            
+            # Format behaviors for SIGMA prompt
+            behavior_summary = behavior_extractor.format_for_sigma(behavior_result)
+            
+            # Enhanced SIGMA-specific prompt with SecureBERT-extracted behaviors
             prompt = f"""Generate a Sigma detection rule based on this threat intelligence:
 
+**EXTRACTED ATTACKER BEHAVIORS:**
+{behavior_summary}
+
+**ARTICLE DETAILS:**
 Article Title: {article.title}
 Source URL: {article.canonical_url or 'N/A'}
 
-Content:
+**FULL CONTENT (for reference):**
 {content}
+
+**INSTRUCTIONS:**
+Focus on the extracted attacker behaviors above to create a targeted Sigma detection rule. Use the behaviors, techniques, and tools identified to build precise detection logic.
 
 Create one high-quality Sigma rule in YAML format with:
 - title: under 50 chars, title case
@@ -1427,7 +1508,7 @@ Please provide a brief but insightful analysis based on the available metadata."
             result = response.json()
             sigma_rules = result['choices'][0]['message']['content']
         
-        # Store the SIGMA rules in article metadata
+        # Store the SIGMA rules and behavior extraction in article metadata
         current_metadata = article.metadata.copy() if article.metadata else {}
         current_metadata['sigma_rules'] = {
             'rules': sigma_rules,
@@ -1435,6 +1516,19 @@ Please provide a brief but insightful analysis based on the available metadata."
             'content_type': 'full content' if include_content else 'metadata only',
             'model_used': 'chatgpt',
             'model_name': 'gpt-4'
+        }
+        
+        # Store behavior extraction results
+        current_metadata['behavior_extraction'] = {
+            'techniques': behavior_result.techniques,
+            'tactics': behavior_result.tactics,
+            'behaviors': behavior_result.behaviors,
+            'tools': behavior_result.tools,
+            'processes': behavior_result.processes,
+            'confidence_scores': behavior_result.confidence_scores,
+            'extraction_method': behavior_result.extraction_method,
+            'processing_time': behavior_result.processing_time,
+            'extracted_at': datetime.now().isoformat()
         }
         
         # Update the article
@@ -1448,7 +1542,16 @@ Please provide a brief but insightful analysis based on the available metadata."
             "generated_at": current_metadata['sigma_rules']['generated_at'],
             "content_type": current_metadata['sigma_rules']['content_type'],
             "model_used": current_metadata['sigma_rules']['model_used'],
-            "model_name": current_metadata['sigma_rules']['model_name']
+            "model_name": current_metadata['sigma_rules']['model_name'],
+            "behavior_extraction": {
+                "techniques": behavior_result.techniques,
+                "tactics": behavior_result.tactics,
+                "behaviors": behavior_result.behaviors,
+                "tools": behavior_result.tools,
+                "processes": behavior_result.processes,
+                "extraction_method": behavior_result.extraction_method,
+                "processing_time": behavior_result.processing_time
+            }
         }
         
     except HTTPException:

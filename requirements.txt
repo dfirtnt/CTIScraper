@@ -31,6 +31,8 @@ scikit-learn==1.5.2
 sentence-transformers==3.1.0
 lightgbm==4.6.0
 joblib==1.4.2
+transformers==4.46.3
+torch==2.5.1
 
 # Utilities
 click==8.2.1
