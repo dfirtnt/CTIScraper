@@ -288,16 +288,10 @@
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
         <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">📄 Article Content</h2>
         
-        {% if article.summary %}
-        <div class="mb-6 p-4 bg-gray-50 rounded-lg">
-            <h3 class="text-lg font-semibold text-gray-800 mb-2">Summary</h3>
-            <p class="text-gray-700">{{ article.summary }}</p>
-        </div>
-        {% endif %}
         
         <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
             <div class="prose max-w-none">
-                <pre class="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200 font-mono">{{ article.content | highlight_keywords(article.metadata.get('perfect_keyword_matches', []), article.metadata.get('good_keyword_matches', [])) | safe }}</pre>
+                <pre id="articleContent" class="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200 font-mono selectable-text">{{ article.content | highlight_keywords(article.metadata.get('perfect_keyword_matches', []), article.metadata.get('good_keyword_matches', [])) | safe }}</pre>
             </div>
         </div>
     </div>
@@ -418,8 +412,16 @@
         const currentClassification = '{{ article.metadata.get("training_category", "") }}';
         localStorage.setItem('currentArticleClassification', currentClassification);
         
-        // Load settings
-        loadSettings();
+        // Load settings (if function exists)
+        if (typeof loadSettings === 'function') {
+            loadSettings();
+        }
+        
+        // Initialize text highlighting functionality
+        initializeTextHighlighting();
+        
+        // Load existing highlights
+        loadExistingHighlights();
     });
     
     // Classification functions
@@ -1682,5 +1684,458 @@
         // Call generateAIAnalysis with force regeneration
         generateAIAnalysis('iocs', true);
     }
+    
+    // Text Highlighting Functions
+    let articleHighlights = [];
+    let currentSelection = null;
+    
+    function initializeTextHighlighting() {
+        const articleContent = document.getElementById('articleContent');
+        if (!articleContent) {
+            console.log('Article content element not found');
+            return;
+        }
+        
+        console.log('Initializing text highlighting on:', articleContent);
+        
+        // Add mouseup event listener for text selection
+        articleContent.addEventListener('mouseup', handleTextSelection);
+        
+        // Add click event listener for highlight interactions
+        articleContent.addEventListener('click', handleHighlightClick);
+        
+        // Prevent context menu on highlights
+        articleContent.addEventListener('contextmenu', function(e) {
+            if (e.target.classList.contains('text-highlight')) {
+                e.preventDefault();
+                showHighlightContextMenu(e);
+            }
+        });
+        
+        console.log('Text highlighting initialized successfully');
+    }
+    
+    function handleHighlightClick(e) {
+        // Handle clicks on existing highlights
+        if (e.target.classList.contains('text-highlight')) {
+            e.stopPropagation();
+            const highlightId = e.target.dataset.highlightId;
+            const highlight = articleHighlights.find(h => h.id == highlightId);
+            if (highlight) {
+                showHighlightContextMenu(e, highlight);
+            }
+        }
+    }
+    
+    function handleTextSelection(e) {
+        console.log('Text selection event triggered');
+        
+        const selection = window.getSelection();
+        const selectedText = selection.toString().trim();
+        
+        console.log('Selected text:', selectedText, 'Length:', selectedText.length);
+        
+        if (selectedText.length > 0) {
+            try {
+                const range = selection.getRangeAt(0);
+                const startOffset = getTextOffset(range.startContainer, range.startOffset);
+                const endOffset = getTextOffset(range.endContainer, range.endOffset);
+                
+                console.log('Selection offsets:', startOffset, 'to', endOffset);
+                
+                // Only show categorization modal if selection is meaningful (more than 3 characters)
+                if (selectedText.length > 3) {
+                    currentSelection = {
+                        text: selectedText,
+                        startOffset: startOffset,
+                        endOffset: endOffset,
+                        range: range
+                    };
+                    
+                    console.log('Showing categorization modal for:', selectedText);
+                    showCategorizationModal(selectedText);
+                } else {
+                    console.log('Selection too short, not showing modal');
+                }
+            } catch (error) {
+                console.error('Error processing text selection:', error);
+            }
+        }
+    }
+    
+    function getTextOffset(node, offset) {
+        const articleContent = document.getElementById('articleContent');
+        const walker = document.createTreeWalker(
+            articleContent,
+            NodeFilter.SHOW_TEXT,
+            null,
+            false
+        );
+        
+        let textOffset = 0;
+        let currentNode;
+        
+        while (currentNode = walker.nextNode()) {
+            if (currentNode === node) {
+                return textOffset + offset;
+            }
+            textOffset += currentNode.textContent.length;
+        }
+        
+        return textOffset;
+    }
+    
+    function showCategorizationModal(selectedText) {
+        console.log('Creating categorization modal for:', selectedText);
+        console.log('Current selection object:', currentSelection);
+        
+        const modal = document.createElement('div');
+        modal.id = 'categorizationModal';
+        modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50';
+        
+        // Add click outside to close
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                closeCategorizationModal();
+            }
+        });
+        
+        // Add ESC key to close
+        const handleEsc = function(e) {
+            if (e.key === 'Escape') {
+                closeCategorizationModal();
+                document.removeEventListener('keydown', handleEsc);
+            }
+        };
+        document.addEventListener('keydown', handleEsc);
+        
+        modal.innerHTML = `
+            <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white dark:bg-gray-800">
+                <div class="mt-3 text-center">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">🎯 Categorize Selected Text</h3>
+                    <div class="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        <p class="text-sm text-gray-600 dark:text-gray-300 mb-2">Selected text:</p>
+                        <p class="text-sm text-gray-800 dark:text-gray-200 italic">"${selectedText}"</p>
+                    </div>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">Is this text huntable?</p>
+                    
+                    <div class="space-y-3">
+                        <button onclick="categorizeSelection(true, '${selectedText}', ${currentSelection ? currentSelection.startOffset : 0}, ${currentSelection ? currentSelection.endOffset : 0})" 
+                                class="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
+                            <span class="mr-2">✅</span>
+                            Yes, Huntable
+                        </button>
+                        
+                        <button onclick="categorizeSelection(false, '${selectedText}', ${currentSelection ? currentSelection.startOffset : 0}, ${currentSelection ? currentSelection.endOffset : 0})" 
+                                class="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors">
+                            <span class="mr-2">❌</span>
+                            No, Not Huntable
+                        </button>
+                        
+                        <button onclick="closeCategorizationModal()" 
+                                class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        console.log('Modal created and added to page');
+    }
+    
+    function closeCategorizationModal() {
+        const modal = document.getElementById('categorizationModal');
+        if (modal) {
+            modal.remove();
+        }
+        currentSelection = null;
+        // Clear any text selection
+        window.getSelection().removeAllRanges();
+    }
+    
+    async function categorizeSelection(isHuntable, selectedText, startOffset, endOffset) {
+        console.log('Categorizing selection:', selectedText, 'as huntable:', isHuntable);
+        console.log('Offsets:', startOffset, 'to', endOffset);
+        
+        // Use parameters if provided, otherwise fall back to currentSelection
+        const text = selectedText || (currentSelection ? currentSelection.text : null);
+        const start = startOffset || (currentSelection ? currentSelection.startOffset : 0);
+        const end = endOffset || (currentSelection ? currentSelection.endOffset : 0);
+        
+        if (!text) {
+            console.error('No text provided for categorization');
+            showNotification('No text selection found. Please select text again.', 'error');
+            return;
+        }
+        
+        closeCategorizationModal();
+        
+        try {
+            const response = await fetch(`/api/articles/{{ article.id }}/highlights`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    selected_text: text,
+                    start_offset: start,
+                    end_offset: end,
+                    is_huntable: isHuntable
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                
+                // Add highlight to the page
+                addHighlightToPage(data.highlight);
+                
+                // Show success message
+                showNotification(`Text categorized as ${isHuntable ? 'huntable' : 'not huntable'}`, 'success');
+                
+                // Clear selection
+                currentSelection = null;
+            } else {
+                const error = await response.json();
+                showNotification(`Error: ${error.detail}`, 'error');
+            }
+        } catch (error) {
+            console.error('Categorization error:', error);
+            showNotification(`Error: ${error.message}`, 'error');
+        }
+    }
+    
+    function addHighlightToPage(highlight) {
+        const articleContent = document.getElementById('articleContent');
+        if (!articleContent) return;
+        
+        // Create highlight element
+        const highlightElement = document.createElement('span');
+        highlightElement.className = `text-highlight ${highlight.is_huntable ? 'huntable' : 'not-huntable'}`;
+        highlightElement.dataset.highlightId = highlight.id;
+        highlightElement.dataset.startOffset = highlight.start_offset;
+        highlightElement.dataset.endOffset = highlight.end_offset;
+        highlightElement.title = `Categorized as ${highlight.is_huntable ? 'huntable' : 'not huntable'} on ${new Date(highlight.categorized_at).toLocaleString()}`;
+        
+        // Add click handler for highlight management
+        highlightElement.addEventListener('click', function(e) {
+            e.stopPropagation();
+            showHighlightContextMenu(e, highlight);
+        });
+        
+        // Insert highlight into the text
+        insertHighlightIntoText(articleContent, highlight);
+    }
+    
+    function insertHighlightIntoText(container, highlight) {
+        const textContent = container.textContent;
+        const beforeText = textContent.substring(0, highlight.start_offset);
+        const selectedText = textContent.substring(highlight.start_offset, highlight.end_offset);
+        const afterText = textContent.substring(highlight.end_offset);
+        
+        // Create highlight element
+        const highlightElement = document.createElement('span');
+        highlightElement.className = `text-highlight ${highlight.is_huntable ? 'huntable' : 'not-huntable'}`;
+        highlightElement.dataset.highlightId = highlight.id;
+        highlightElement.dataset.startOffset = highlight.start_offset;
+        highlightElement.dataset.endOffset = highlight.end_offset;
+        highlightElement.textContent = selectedText;
+        highlightElement.title = `Categorized as ${highlight.is_huntable ? 'huntable' : 'not huntable'} on ${new Date(highlight.categorized_at).toLocaleString()}`;
+        
+        // Add click handler
+        highlightElement.addEventListener('click', function(e) {
+            e.stopPropagation();
+            showHighlightContextMenu(e, highlight);
+        });
+        
+        // Replace the text content with highlighted version
+        container.innerHTML = beforeText + highlightElement.outerHTML + afterText;
+    }
+    
+    async function loadExistingHighlights() {
+        try {
+            const response = await fetch(`/api/articles/{{ article.id }}/highlights`);
+            if (response.ok) {
+                const data = await response.json();
+                articleHighlights = data.highlights;
+                
+                // Add highlights to the page
+                data.highlights.forEach(highlight => {
+                    addHighlightToPage(highlight);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading highlights:', error);
+        }
+    }
+    
+    function showHighlightContextMenu(e, highlight) {
+        const modal = document.createElement('div');
+        modal.id = 'highlightContextModal';
+        modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50';
+        
+        // Add click outside to close
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                closeHighlightContextModal();
+            }
+        });
+        
+        // Add ESC key to close
+        const handleEsc = function(e) {
+            if (e.key === 'Escape') {
+                closeHighlightContextModal();
+                document.removeEventListener('keydown', handleEsc);
+            }
+        };
+        document.addEventListener('keydown', handleEsc);
+        
+        modal.innerHTML = `
+            <div class="relative top-20 mx-auto p-5 border w-80 shadow-lg rounded-md bg-white dark:bg-gray-800">
+                <div class="mt-3 text-center">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">🎯 Highlight Options</h3>
+                    <div class="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        <p class="text-sm text-gray-600 dark:text-gray-300 mb-2">Highlighted text:</p>
+                        <p class="text-sm text-gray-800 dark:text-gray-200 italic">"${highlight.selected_text}"</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Status: ${highlight.is_huntable ? '✅ Huntable' : '❌ Not Huntable'}
+                        </p>
+                    </div>
+                    
+                    <div class="space-y-3">
+                        <button onclick="toggleHighlightCategory(${highlight.id}, ${!highlight.is_huntable})" 
+                                class="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white ${highlight.is_huntable ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors">
+                            <span class="mr-2">${highlight.is_huntable ? '❌' : '✅'}</span>
+                            Mark as ${highlight.is_huntable ? 'Not Huntable' : 'Huntable'}
+                        </button>
+                        
+                        <button onclick="deleteHighlight(${highlight.id})" 
+                                class="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors">
+                            <span class="mr-2">🗑️</span>
+                            Delete Highlight
+                        </button>
+                        
+                        <button onclick="closeHighlightContextModal()" 
+                                class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    
+    function closeHighlightContextModal() {
+        const modal = document.getElementById('highlightContextModal');
+        if (modal) {
+            modal.remove();
+        }
+    }
+    
+    async function toggleHighlightCategory(highlightId, newIsHuntable) {
+        closeHighlightContextModal();
+        
+        try {
+            const response = await fetch(`/api/highlights/${highlightId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    is_huntable: newIsHuntable
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                
+                // Update the highlight on the page
+                updateHighlightOnPage(data.highlight);
+                
+                // Show success message
+                showNotification(`Highlight updated to ${newIsHuntable ? 'huntable' : 'not huntable'}`, 'success');
+            } else {
+                const error = await response.json();
+                showNotification(`Error: ${error.detail}`, 'error');
+            }
+        } catch (error) {
+            showNotification(`Error: ${error.message}`, 'error');
+        }
+    }
+    
+    async function deleteHighlight(highlightId) {
+        closeHighlightContextModal();
+        
+        if (!confirm('Are you sure you want to delete this highlight?')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/highlights/${highlightId}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                // Remove highlight from the page
+                removeHighlightFromPage(highlightId);
+                
+                // Show success message
+                showNotification('Highlight deleted successfully', 'success');
+            } else {
+                const error = await response.json();
+                showNotification(`Error: ${error.detail}`, 'error');
+            }
+        } catch (error) {
+            showNotification(`Error: ${error.message}`, 'error');
+        }
+    }
+    
+    function updateHighlightOnPage(highlight) {
+        const highlightElement = document.querySelector(`[data-highlight-id="${highlight.id}"]`);
+        if (highlightElement) {
+            // Update classes
+            highlightElement.className = `text-highlight ${highlight.is_huntable ? 'huntable' : 'not-huntable'}`;
+            
+            // Update title
+            highlightElement.title = `Categorized as ${highlight.is_huntable ? 'huntable' : 'not huntable'} on ${new Date(highlight.categorized_at).toLocaleString()}`;
+        }
+    }
+    
+    function removeHighlightFromPage(highlightId) {
+        const highlightElement = document.querySelector(`[data-highlight-id="${highlightId}"]`);
+        if (highlightElement) {
+            // Replace highlight element with just the text
+            const textNode = document.createTextNode(highlightElement.textContent);
+            highlightElement.parentNode.replaceChild(textNode, highlightElement);
+        }
+    }
+    
+    // Debug function - call from browser console: debugHighlighting()
+    window.debugHighlighting = function() {
+        console.log('=== HIGHLIGHTING DEBUG INFO ===');
+        
+        const articleContent = document.getElementById('articleContent');
+        if (!articleContent) {
+            console.error('❌ Article content element not found!');
+            return;
+        }
+        
+        console.log('✅ Article content element found:', articleContent);
+        console.log('📏 Article content text length:', articleContent.textContent.length);
+        console.log('🎯 Article highlights loaded:', articleHighlights.length);
+        
+        // Test text selection
+        const selection = window.getSelection();
+        console.log('📝 Current selection:', selection.toString());
+        
+        // Test modal function
+        console.log('🧪 Testing categorization modal...');
+        showCategorizationModal('Debug test - this is a test selection');
+        
+        console.log('=== END DEBUG INFO ===');
+    };
 </script>
 {% endblock %}

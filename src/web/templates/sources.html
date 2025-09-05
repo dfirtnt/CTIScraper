@@ -18,21 +18,6 @@
         </div>
     </div>
 
-    <!-- 90-Day Window Note -->
-    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-        <div class="flex items-start">
-            <div class="flex-shrink-0">
-                <span class="text-blue-400 text-lg">ℹ️</span>
-            </div>
-            <div class="ml-3">
-                <h3 class="text-sm font-medium text-blue-800">Collection Window</h3>
-                <p class="text-sm text-blue-700">
-                    Articles older than <strong>90 days</strong> are automatically filtered out during collection to maintain data freshness. 
-                    This ensures your threat intelligence feed contains only recent and relevant information.
-                </p>
-            </div>
-        </div>
-    </div>
 
     <!-- Quality Summary -->
     <!-- Debug: quality_stats count: {{ quality_stats|length }} -->
@@ -41,24 +26,32 @@
         <h3 class="text-lg font-medium text-gray-900 mb-4">📊 Overall Quality Summary</h3>
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
             <div class="text-center">
-                <p class="text-2xl font-bold text-gray-900">{{ quality_stats.values()|sum(attribute='total_articles') }}</p>
+                <a href="/articles" class="text-2xl font-bold text-gray-900 hover:text-blue-600 hover:underline cursor-pointer">
+                    {{ quality_stats.values()|sum(attribute='total_articles') }}
+                </a>
                 <p class="text-sm text-gray-500">Total Articles</p>
             </div>
             <div class="text-center">
-                <p class="text-2xl font-bold text-red-600">{{ quality_stats.values()|sum(attribute='rejected_count') }}</p>
+                <a href="/articles?classification=rejected" class="text-2xl font-bold text-red-600 hover:text-red-800 hover:underline cursor-pointer">
+                    {{ quality_stats.values()|sum(attribute='rejected_count') }}
+                </a>
                 <p class="text-sm text-gray-500">Total Rejected</p>
             </div>
             <div class="text-center">
-                <p class="text-2xl font-bold text-green-600">{{ quality_stats.values()|sum(attribute='chosen_count') }}</p>
+                <a href="/articles?classification=chosen" class="text-2xl font-bold text-green-600 hover:text-green-800 hover:underline cursor-pointer">
+                    {{ quality_stats.values()|sum(attribute='chosen_count') }}
+                </a>
                 <p class="text-sm text-gray-500">Total Chosen</p>
             </div>
             <div class="text-center">
                 {% set total_articles = quality_stats.values()|sum(attribute='total_articles') %}
                 {% set total_rejected = quality_stats.values()|sum(attribute='rejected_count') %}
                 {% if total_articles > 0 %}
-                    <p class="text-2xl font-bold text-blue-600">{{ (total_rejected / total_articles * 100)|round(1) }}%</p>
+                    <a href="/articles?classification=rejected" class="text-2xl font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer">
+                        {{ (total_rejected / total_articles * 100)|round(1) }}%
+                    </a>
                 {% else %}
-                    <p class="text-2xl font-bold text-blue-600">0%</p>
+                    <span class="text-2xl font-bold text-blue-600">0%</span>
                 {% endif %}
                 <p class="text-sm text-gray-500">Overall Rejection Rate</p>
             </div>
@@ -157,7 +150,12 @@
                 <div class="flex items-start justify-between">
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center space-x-2 mb-2">
-                            <h4 class="text-lg font-medium text-gray-900">{{ source.name }}</h4>
+                            <h4 class="text-lg font-medium text-gray-900">
+                                <a href="{{ source.url }}" target="_blank" rel="noopener noreferrer" 
+                                   class="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer">
+                                    {{ source.name }}
+                                </a>
+                            </h4>
                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
                                          {% if source.active %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
                                 {% if source.active %}Active{% else %}Inactive{% endif %}
@@ -220,19 +218,31 @@
                             <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                                 <div>
                                     <p class="text-xs text-gray-500">Total Articles</p>
-                                    <p class="text-sm font-medium text-gray-900">{{ stat.total_articles }}</p>
+                                    <a href="/articles?source={{ source.id }}" 
+                                       class="text-sm font-medium text-gray-900 hover:text-blue-600 hover:underline cursor-pointer">
+                                        {{ stat.total_articles }}
+                                    </a>
                                 </div>
                                 <div>
                                     <p class="text-xs text-gray-500">Rejected</p>
-                                    <p class="text-sm font-medium text-red-600">{{ stat.rejected_count }} ({{ stat.rejection_rate }}%)</p>
+                                    <a href="/articles?source={{ source.id }}&classification=rejected" 
+                                       class="text-sm font-medium text-red-600 hover:text-red-800 hover:underline cursor-pointer">
+                                        {{ stat.rejected_count }} ({{ stat.rejection_rate }}%)
+                                    </a>
                                 </div>
                                 <div>
                                     <p class="text-xs text-gray-500">Chosen</p>
-                                    <p class="text-sm font-medium text-green-600">{{ stat.chosen_count }} ({{ stat.acceptance_rate }}%)</p>
+                                    <a href="/articles?source={{ source.id }}&classification=chosen" 
+                                       class="text-sm font-medium text-green-600 hover:text-green-800 hover:underline cursor-pointer">
+                                        {{ stat.chosen_count }} ({{ stat.acceptance_rate }}%)
+                                    </a>
                                 </div>
                                 <div>
                                     <p class="text-xs text-gray-500">Unclassified</p>
-                                    <p class="text-sm font-medium text-gray-600">{{ stat.unclassified_count }}</p>
+                                    <a href="/articles?source={{ source.id }}&classification=unclassified" 
+                                       class="text-sm font-medium text-gray-600 hover:text-gray-800 hover:underline cursor-pointer">
+                                        {{ stat.unclassified_count }}
+                                    </a>
                                 </div>
                             </div>
                         </div>

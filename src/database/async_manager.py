@@ -634,7 +634,6 @@ class AsyncDatabaseManager:
             modified_at=db_article.modified_at,
             authors=db_article.authors,
             tags=db_article.tags,
-            summary=db_article.summary,
             content=db_article.content,
             content_hash=db_article.content_hash,
             metadata=db_article.article_metadata,

@@ -21,6 +21,7 @@ alembic==1.16.5
 fastapi==0.116.1
 uvicorn[standard]==0.32.1
 jinja2==3.1.6
+python-multipart==0.0.12
 
 # Background task processing
 celery==5.4.0

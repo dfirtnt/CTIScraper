@@ -17,7 +17,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Request, Response
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Request, Response, File, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -552,7 +552,7 @@ async def articles_list(
     classification: Optional[str] = None,
     threat_hunting_range: Optional[str] = None,
     sort_by: Optional[str] = "date_published",
-    per_page: Optional[int] = 100,
+    per_page: Optional[int] = 50,
     page: Optional[int] = 1
 ):
     """Articles listing page."""
@@ -1912,6 +1912,430 @@ async def api_extract_iocs(article_id: int, request: Request):
         logger.error(f"IOC extraction error type: {type(e)}")
         logger.error(f"IOC extraction error traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# Text Highlight Endpoints
+@app.post("/api/articles/{article_id}/highlights")
+async def api_create_text_highlight(article_id: int, request: Request):
+    """API endpoint for creating a text highlight."""
+    try:
+        data = await request.json()
+        
+        # Validate required fields
+        required_fields = ['selected_text', 'start_offset', 'end_offset', 'is_huntable']
+        for field in required_fields:
+            if field not in data:
+                raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
+        
+        # Validate offsets
+        if data['start_offset'] < 0 or data['end_offset'] < 0:
+            raise HTTPException(status_code=400, detail="Offsets must be non-negative")
+        
+        if data['start_offset'] >= data['end_offset']:
+            raise HTTPException(status_code=400, detail="Start offset must be less than end offset")
+        
+        # Get article to validate it exists and get content length
+        async with async_db_manager.get_session() as session:
+            article_result = await session.execute(
+                text("SELECT id, content FROM articles WHERE id = :article_id"),
+                {"article_id": article_id}
+            )
+            article = article_result.fetchone()
+            
+            if not article:
+                raise HTTPException(status_code=404, detail="Article not found")
+            
+            # Validate offsets against content length
+            content_length = len(article.content)
+            if data['end_offset'] > content_length:
+                raise HTTPException(status_code=400, detail="End offset exceeds article content length")
+            
+            # Create text highlight
+            result = await session.execute(
+                text("""
+                    INSERT INTO text_highlights (article_id, selected_text, start_offset, end_offset, is_huntable, categorized_at)
+                    VALUES (:article_id, :selected_text, :start_offset, :end_offset, :is_huntable, NOW())
+                    RETURNING id, article_id, selected_text, start_offset, end_offset, is_huntable, categorized_at, created_at, updated_at
+                """),
+                {
+                    "article_id": article_id,
+                    "selected_text": data['selected_text'],
+                    "start_offset": data['start_offset'],
+                    "end_offset": data['end_offset'],
+                    "is_huntable": data['is_huntable']
+                }
+            )
+            
+            highlight = result.fetchone()
+            await session.commit()
+            
+            return {
+                "success": True,
+                "message": "Text highlight created successfully",
+                "highlight": {
+                    "id": highlight.id,
+                    "article_id": highlight.article_id,
+                    "selected_text": highlight.selected_text,
+                    "start_offset": highlight.start_offset,
+                    "end_offset": highlight.end_offset,
+                    "is_huntable": highlight.is_huntable,
+                    "categorized_at": highlight.categorized_at.isoformat() if highlight.categorized_at else None,
+                    "created_at": highlight.created_at.isoformat(),
+                    "updated_at": highlight.updated_at.isoformat()
+                }
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Text highlight creation error: {e}")
+        logger.error(f"Text highlight creation error traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/articles/{article_id}/highlights")
+async def api_get_text_highlights(article_id: int):
+    """API endpoint for getting all text highlights for an article."""
+    try:
+        async with async_db_manager.get_session() as session:
+            result = await session.execute(
+                text("""
+                    SELECT id, article_id, selected_text, start_offset, end_offset, is_huntable, 
+                           categorized_at, created_at, updated_at
+                    FROM text_highlights 
+                    WHERE article_id = :article_id
+                    ORDER BY created_at DESC
+                """),
+                {"article_id": article_id}
+            )
+            
+            highlights = result.fetchall()
+            
+            return {
+                "success": True,
+                "highlights": [
+                    {
+                        "id": highlight.id,
+                        "article_id": highlight.article_id,
+                        "selected_text": highlight.selected_text,
+                        "start_offset": highlight.start_offset,
+                        "end_offset": highlight.end_offset,
+                        "is_huntable": highlight.is_huntable,
+                        "categorized_at": highlight.categorized_at.isoformat() if highlight.categorized_at else None,
+                        "created_at": highlight.created_at.isoformat(),
+                        "updated_at": highlight.updated_at.isoformat()
+                    }
+                    for highlight in highlights
+                ]
+            }
+            
+    except Exception as e:
+        logger.error(f"Get text highlights error: {e}")
+        logger.error(f"Get text highlights error traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/highlights/{highlight_id}")
+async def api_update_text_highlight(highlight_id: int, request: Request):
+    """API endpoint for updating a text highlight categorization."""
+    try:
+        data = await request.json()
+        
+        if 'is_huntable' not in data:
+            raise HTTPException(status_code=400, detail="Missing required field: is_huntable")
+        
+        async with async_db_manager.get_session() as session:
+            result = await session.execute(
+                text("""
+                    UPDATE text_highlights 
+                    SET is_huntable = :is_huntable, categorized_at = NOW(), updated_at = NOW()
+                    WHERE id = :highlight_id
+                    RETURNING id, article_id, selected_text, start_offset, end_offset, is_huntable, 
+                              categorized_at, created_at, updated_at
+                """),
+                {
+                    "highlight_id": highlight_id,
+                    "is_huntable": data['is_huntable']
+                }
+            )
+            
+            highlight = result.fetchone()
+            
+            if not highlight:
+                raise HTTPException(status_code=404, detail="Text highlight not found")
+            
+            await session.commit()
+            
+            return {
+                "success": True,
+                "message": "Text highlight updated successfully",
+                "highlight": {
+                    "id": highlight.id,
+                    "article_id": highlight.article_id,
+                    "selected_text": highlight.selected_text,
+                    "start_offset": highlight.start_offset,
+                    "end_offset": highlight.end_offset,
+                    "is_huntable": highlight.is_huntable,
+                    "categorized_at": highlight.categorized_at.isoformat() if highlight.categorized_at else None,
+                    "created_at": highlight.created_at.isoformat(),
+                    "updated_at": highlight.updated_at.isoformat()
+                }
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Text highlight update error: {e}")
+        logger.error(f"Text highlight update error traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/highlights/{highlight_id}")
+async def api_delete_text_highlight(highlight_id: int):
+    """API endpoint for deleting a text highlight."""
+    try:
+        async with async_db_manager.get_session() as session:
+            result = await session.execute(
+                text("DELETE FROM text_highlights WHERE id = :highlight_id RETURNING id"),
+                {"highlight_id": highlight_id}
+            )
+            
+            deleted = result.fetchone()
+            
+            if not deleted:
+                raise HTTPException(status_code=404, detail="Text highlight not found")
+            
+            await session.commit()
+            
+            return {
+                "success": True,
+                "message": "Text highlight deleted successfully"
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Text highlight deletion error: {e}")
+        logger.error(f"Text highlight deletion error traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/database/backup")
+async def api_database_backup():
+    """Create a database backup and return it as a downloadable file."""
+    try:
+        import tempfile
+        import os
+        from datetime import datetime
+        from sqlalchemy import text
+        
+        # Get database connection details
+        db_name = os.getenv('POSTGRES_DB', 'cti_scraper')
+        db_user = os.getenv('POSTGRES_USER', 'cti_user')
+        
+        # Create a temporary file for the backup
+        with tempfile.NamedTemporaryFile(mode='w+', suffix='.sql', delete=False) as temp_file:
+            backup_file = temp_file.name
+        
+        try:
+            # Use SQLAlchemy to create a backup by dumping all tables
+            async with async_db_manager.get_session() as session:
+                # Start the backup file with header
+                backup_content = f"""-- CTI Scraper Database Backup
+-- Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+-- Database: {db_name}
+-- User: {db_user}
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+-- Drop existing objects
+DROP SCHEMA IF EXISTS public CASCADE;
+CREATE SCHEMA public;
+GRANT ALL ON SCHEMA public TO postgres;
+GRANT ALL ON SCHEMA public TO public;
+
+"""
+                
+                # Get all tables
+                tables_result = await session.execute(text("""
+                    SELECT table_name 
+                    FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    ORDER BY table_name
+                """))
+                tables = [row[0] for row in tables_result.fetchall()]
+                
+                # Dump each table
+                for table in tables:
+                    # Get table structure
+                    structure_result = await session.execute(text(f"""
+                        SELECT column_name, data_type, is_nullable, column_default
+                        FROM information_schema.columns 
+                        WHERE table_name = '{table}' AND table_schema = 'public'
+                        ORDER BY ordinal_position
+                    """))
+                    columns = structure_result.fetchall()
+                    
+                    # Create table structure
+                    backup_content += f"\n-- Table: {table}\n"
+                    backup_content += f"CREATE TABLE {table} (\n"
+                    
+                    column_definitions = []
+                    for col in columns:
+                        col_name, data_type, is_nullable, default_val = col
+                        nullable = "NULL" if is_nullable == "YES" else "NOT NULL"
+                        default = f" DEFAULT {default_val}" if default_val else ""
+                        column_definitions.append(f"    {col_name} {data_type} {nullable}{default}")
+                    
+                    backup_content += ",\n".join(column_definitions)
+                    backup_content += "\n);\n\n"
+                    
+                    # Get table data
+                    data_result = await session.execute(text(f"SELECT * FROM {table}"))
+                    rows = data_result.fetchall()
+                    
+                    if rows:
+                        # Get column names from the first row
+                        if rows:
+                            column_names = list(rows[0]._mapping.keys())
+                            
+                            # Insert data
+                            backup_content += f"-- Data for table {table}\n"
+                            for row in rows:
+                                values = []
+                                for col_name in column_names:
+                                    value = row._mapping[col_name]
+                                    if value is None:
+                                        values.append("NULL")
+                                    elif isinstance(value, str):
+                                        # Escape single quotes
+                                        escaped_value = value.replace("'", "''")
+                                        values.append(f"'{escaped_value}'")
+                                    else:
+                                        values.append(str(value))
+                                
+                                backup_content += f"INSERT INTO {table} ({', '.join(column_names)}) VALUES ({', '.join(values)});\n"
+                            backup_content += "\n"
+                
+                # Write backup content to file
+                with open(backup_file, 'w', encoding='utf-8') as f:
+                    f.write(backup_content)
+                
+                # Read the backup file as bytes
+                with open(backup_file, 'rb') as f:
+                    backup_content_bytes = f.read()
+                
+                # Clean up temporary file
+                os.unlink(backup_file)
+                
+                # Create filename with timestamp
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                filename = f"cti_scraper_backup_{timestamp}.sql"
+                
+                # Return the backup as a downloadable file
+                from fastapi.responses import Response
+                return Response(
+                    content=backup_content_bytes,
+                    media_type='application/sql',
+                    headers={
+                        'Content-Disposition': f'attachment; filename="{filename}"',
+                        'Content-Length': str(len(backup_content_bytes))
+                    }
+                )
+            
+        except Exception as e:
+            logger.error(f"Database backup error: {e}")
+            # Clean up temporary file if it exists
+            if os.path.exists(backup_file):
+                os.unlink(backup_file)
+            raise HTTPException(status_code=500, detail=f"Database backup failed: {str(e)}")
+            
+    except Exception as e:
+        logger.error(f"Database backup endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=f"Backup failed: {str(e)}")
+
+
+@app.post("/api/database/restore")
+async def api_database_restore(backup_file: UploadFile = File(...)):
+    """Restore database from a backup file."""
+    try:
+        import tempfile
+        import os
+        import subprocess
+        from sqlalchemy import text
+        
+        # Validate file type
+        if not backup_file.filename.endswith('.sql'):
+            raise HTTPException(status_code=400, detail="Only .sql files are supported")
+        
+        # Get database connection details
+        db_name = os.getenv('POSTGRES_DB', 'cti_scraper')
+        db_user = os.getenv('POSTGRES_USER', 'cti_user')
+        db_password = os.getenv('POSTGRES_PASSWORD', 'cti_password')
+        
+        # Create a temporary file for the backup
+        with tempfile.NamedTemporaryFile(mode='w+', suffix='.sql', delete=False) as temp_file:
+            restore_file = temp_file.name
+        
+        try:
+            # Read the uploaded file content
+            content = await backup_file.read()
+            
+            # Write content to temporary file
+            with open(restore_file, 'wb') as f:
+                f.write(content)
+            
+            # Use docker exec to run psql in the postgres container
+            cmd = [
+                'docker', 'exec', '-i', 'cti_postgres',
+                'psql',
+                '-U', db_user,
+                '-d', db_name,
+                '--no-password'
+            ]
+            
+            logger.info(f"Running restore command: {' '.join(cmd)}")
+            
+            # Set PGPASSWORD environment variable for the docker exec
+            env = os.environ.copy()
+            env['PGPASSWORD'] = db_password
+            
+            # Run the restore command
+            with open(restore_file, 'r') as f:
+                result = subprocess.run(cmd, env=env, stdin=f, capture_output=True, text=True, timeout=300)
+            
+            if result.returncode != 0:
+                logger.error(f"psql restore failed: {result.stderr}")
+                raise HTTPException(status_code=500, detail=f"Database restore failed: {result.stderr}")
+            
+            # Clean up temporary file
+            os.unlink(restore_file)
+            
+            logger.info("Database restore completed successfully")
+            
+            return {"message": "Database restored successfully", "details": result.stdout}
+            
+        except subprocess.TimeoutExpired:
+            logger.error("Database restore timed out")
+            raise HTTPException(status_code=500, detail="Database restore timed out")
+        except Exception as e:
+            logger.error(f"Database restore error: {e}")
+            # Clean up temporary file if it exists
+            if os.path.exists(restore_file):
+                os.unlink(restore_file)
+            raise HTTPException(status_code=500, detail=f"Database restore failed: {str(e)}")
+            
+    except Exception as e:
+        logger.error(f"Database restore endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=f"Restore failed: {str(e)}")
+
 
 # Health Check Endpoints
 @app.get("/api/health")

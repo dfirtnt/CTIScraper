@@ -61,7 +61,6 @@ class ArticleTable(Base):
     modified_at = Column(DateTime, nullable=True)
     authors = Column(JSON, nullable=False, default=list)  # List of strings
     tags = Column(JSON, nullable=False, default=list)    # List of strings
-    summary = Column(Text, nullable=True)
     content = Column(Text, nullable=False)
     content_hash = Column(String(64), nullable=False, unique=True, index=True)
     article_metadata = Column(JSON, nullable=False, default=dict)
@@ -139,6 +138,30 @@ class SimHashBucketTable(Base):
     
     def __repr__(self):
         return f"<SimHashBucket(bucket={self.bucket_id}, simhash={self.simhash}, article_id={self.article_id})>"
+
+
+class TextHighlightTable(Base):
+    """Database table for user-selected text highlights and categorization."""
+    
+    __tablename__ = 'text_highlights'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    article_id = Column(Integer, ForeignKey('articles.id'), nullable=False, index=True)
+    selected_text = Column(Text, nullable=False)
+    start_offset = Column(Integer, nullable=False)
+    end_offset = Column(Integer, nullable=False)
+    is_huntable = Column(Boolean, nullable=False, default=False)
+    categorized_at = Column(DateTime, nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime, nullable=False, default=func.now())
+    updated_at = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    article = relationship("ArticleTable")
+    
+    def __repr__(self):
+        return f"<TextHighlight(id={self.id}, article_id={self.article_id}, huntable={self.is_huntable})>"
 
 
 class URLTrackingTable(Base):

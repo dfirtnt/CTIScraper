@@ -17,7 +17,6 @@ class Article(BaseModel):
     modified_at: Optional[datetime] = Field(None, description="Last modification date")
     authors: List[str] = Field(default_factory=list, description="Article authors")
     tags: List[str] = Field(default_factory=list, description="Article tags/categories")
-    summary: Optional[str] = Field(None, description="Article summary/excerpt")
     content: str = Field(..., min_length=1, description="Full article content")
     content_hash: str = Field(..., description="SHA256 hash of content for deduplication")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Raw structured data")
@@ -65,7 +64,6 @@ class Article(BaseModel):
                 "published_at": "2024-01-15T10:30:00Z",
                 "authors": ["Jane Doe", "John Smith"],
                 "tags": ["APT", "malware", "analysis"],
-                "summary": "Comprehensive analysis of recent APT campaign...",
                 "content": "Full article content here...",
                 "content_hash": "abc123...",
                 "metadata": {
@@ -86,7 +84,6 @@ class ArticleCreate(BaseModel):
     modified_at: Optional[datetime] = None
     authors: List[str] = Field(default_factory=list)
     tags: List[str] = Field(default_factory=list)
-    summary: Optional[str] = None
     content: str
     content_hash: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
@@ -114,7 +111,6 @@ class ArticleUpdate(BaseModel):
     modified_at: Optional[datetime] = None
     authors: Optional[List[str]] = None
     tags: Optional[List[str]] = None
-    summary: Optional[str] = None
     content: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
     processing_status: Optional[str] = None
