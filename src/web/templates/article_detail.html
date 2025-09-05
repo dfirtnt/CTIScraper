@@ -135,66 +135,71 @@
         </div>
     </div>
 
-    <!-- Perfect Keywords Section -->
-    {% if article.metadata and article.metadata.get('perfect_keyword_matches') %}
-    {% set perfect_matches = article.metadata.get('perfect_keyword_matches', []) %}
-    {% if perfect_matches %}
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
-        <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">⭐ Perfect Keywords</h2>
-        <div class="mb-3">
-            <details class="group">
-                <summary class="cursor-pointer text-sm text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300">
-                    <span class="inline-flex items-center">
-                        ⭐ Perfect Keywords ({{ perfect_matches|length }})
-                        <svg class="w-4 h-4 ml-1 transform group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                        </svg>
-                    </span>
-                </summary>
-                <div class="mt-2 pl-4">
-                    <div class="flex flex-wrap gap-1">
-                        {% for keyword in perfect_matches %}
-                        <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
-                            {{ keyword }}
+    <!-- Keywords Section - Side by Side -->
+    {% if (article.metadata and article.metadata.get('perfect_keyword_matches')) or (article.metadata and article.metadata.get('good_keyword_matches')) %}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Perfect Keywords Section -->
+        {% if article.metadata and article.metadata.get('perfect_keyword_matches') %}
+        {% set perfect_matches = article.metadata.get('perfect_keyword_matches', []) %}
+        {% if perfect_matches %}
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">⭐ Perfect Keywords</h2>
+            <div class="mb-3">
+                <details class="group">
+                    <summary class="cursor-pointer text-sm text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300">
+                        <span class="inline-flex items-center">
+                            ⭐ Perfect Keywords ({{ perfect_matches|length }})
+                            <svg class="w-4 h-4 ml-1 transform group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
                         </span>
-                        {% endfor %}
+                    </summary>
+                    <div class="mt-2 pl-4">
+                        <div class="flex flex-wrap gap-1">
+                            {% for keyword in perfect_matches %}
+                            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                                {{ keyword }}
+                            </span>
+                            {% endfor %}
+                        </div>
                     </div>
-                </div>
-            </details>
+                </details>
+            </div>
         </div>
-    </div>
-    {% endif %}
-    {% endif %}
+        {% endif %}
+        {% endif %}
 
-    <!-- Good Keywords Section -->
-    {% if article.metadata and article.metadata.get('good_keyword_matches') %}
-    {% set good_matches = article.metadata.get('good_keyword_matches', []) %}
-    {% if good_matches %}
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
-        <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">✅ Good Keywords</h2>
-        <div class="mb-3">
-            <details class="group">
-                <summary class="cursor-pointer text-sm text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300">
-                    <span class="inline-flex items-center">
-                        ✅ Good Keywords ({{ good_matches|length }})
-                        <svg class="w-4 h-4 ml-1 transform group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                        </svg>
-                    </span>
-                </summary>
-                <div class="mt-2 pl-4">
-                    <div class="flex flex-wrap gap-1">
-                        {% for keyword in good_matches %}
-                        <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                            {{ keyword }}
+        <!-- Good Keywords Section -->
+        {% if article.metadata and article.metadata.get('good_keyword_matches') %}
+        {% set good_matches = article.metadata.get('good_keyword_matches', []) %}
+        {% if good_matches %}
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">✅ Good Keywords</h2>
+            <div class="mb-3">
+                <details class="group">
+                    <summary class="cursor-pointer text-sm text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300">
+                        <span class="inline-flex items-center">
+                            ✅ Good Keywords ({{ good_matches|length }})
+                            <svg class="w-4 h-4 ml-1 transform group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
                         </span>
-                        {% endfor %}
+                    </summary>
+                    <div class="mt-2 pl-4">
+                        <div class="flex flex-wrap gap-1">
+                            {% for keyword in good_matches %}
+                            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                {{ keyword }}
+                            </span>
+                            {% endfor %}
+                        </div>
                     </div>
-                </div>
-            </details>
+                </details>
+            </div>
         </div>
+        {% endif %}
+        {% endif %}
     </div>
-    {% endif %}
     {% endif %}
 
     <!-- Classification Controls -->
@@ -2020,54 +2025,7 @@
         rebuildAllHighlights();
     }
     
-    function insertHighlightIntoText(container, highlight) {
-        // Get the plain text content (without any existing highlights)
-        const textContent = container.textContent;
-        const beforeText = textContent.substring(0, highlight.start_offset);
-        const selectedText = textContent.substring(highlight.start_offset, highlight.end_offset);
-        const afterText = textContent.substring(highlight.end_offset);
-        
-        // Create highlight element
-        const highlightElement = document.createElement('span');
-        highlightElement.className = `text-highlight ${highlight.is_huntable ? 'huntable' : 'not-huntable'}`;
-        highlightElement.dataset.highlightId = highlight.id;
-        highlightElement.dataset.startOffset = highlight.start_offset;
-        highlightElement.dataset.endOffset = highlight.end_offset;
-        highlightElement.textContent = selectedText;
-        highlightElement.title = `Categorized as ${highlight.is_huntable ? 'huntable' : 'not huntable'} on ${new Date(highlight.categorized_at).toLocaleString()}`;
-        
-        // Add click handler
-        highlightElement.addEventListener('click', function(e) {
-            e.stopPropagation();
-            showHighlightContextMenu(e, highlight);
-        });
-        
-        // Check if this highlight overlaps with existing ones
-        const existingHighlights = container.querySelectorAll('.text-highlight');
-        let hasOverlap = false;
-        
-        existingHighlights.forEach(existingHighlight => {
-            const existingStart = parseInt(existingHighlight.dataset.startOffset);
-            const existingEnd = parseInt(existingHighlight.dataset.endOffset);
-            
-            // Check for overlap
-            if ((highlight.start_offset < existingEnd && highlight.end_offset > existingStart)) {
-                hasOverlap = true;
-                console.log('⚠️ Highlight overlap detected:', {
-                    new: {start: highlight.start_offset, end: highlight.end_offset},
-                    existing: {start: existingStart, end: existingEnd}
-                });
-            }
-        });
-        
-        if (hasOverlap) {
-            console.log('🔄 Rebuilding all highlights to handle overlap');
-            rebuildAllHighlights();
-        } else {
-            // Safe to insert without affecting existing highlights
-            container.innerHTML = beforeText + highlightElement.outerHTML + afterText;
-        }
-    }
+    // Removed insertHighlightIntoText function - using rebuildAllHighlights instead
     
     function rebuildAllHighlights() {
         const articleContent = document.getElementById('articleContent');
@@ -2097,7 +2055,7 @@
                         sortedHighlights.length - validHighlights.length);
         }
         
-        // Build the HTML with all highlights
+        // Build the HTML with all highlights using string concatenation
         let html = '';
         let lastOffset = 0;
         
@@ -2108,25 +2066,12 @@
                 html += escapeHtml(textBefore);
             }
             
-            // Add the highlight
-            const highlightElement = document.createElement('span');
-            highlightElement.className = `text-highlight ${highlight.is_huntable ? 'huntable' : 'not-huntable'}`;
-            highlightElement.dataset.highlightId = highlight.id;
-            highlightElement.dataset.startOffset = highlight.start_offset;
-            highlightElement.dataset.endOffset = highlight.end_offset;
-            highlightElement.textContent = highlight.selected_text;
-            highlightElement.title = `Categorized as ${highlight.is_huntable ? 'huntable' : 'not huntable'} on ${new Date(highlight.categorized_at).toLocaleString()}`;
+            // Create highlight HTML as string to avoid DOM manipulation
+            const highlightClass = `text-highlight ${highlight.is_huntable ? 'huntable' : 'not-huntable'}`;
+            const highlightTitle = `Categorized as ${highlight.is_huntable ? 'huntable' : 'not huntable'} on ${new Date(highlight.categorized_at).toLocaleString()}`;
             
-            // Add click handler
-            highlightElement.addEventListener('click', function(e) {
-                e.stopPropagation();
-                const highlightData = articleHighlights.find(h => h.id == highlight.id);
-                if (highlightData) {
-                    showHighlightContextMenu(e, highlightData);
-                }
-            });
+            html += `<span class="${highlightClass}" data-highlight-id="${highlight.id}" data-start-offset="${highlight.start_offset}" data-end-offset="${highlight.end_offset}" title="${escapeHtml(highlightTitle)}">${escapeHtml(highlight.selected_text)}</span>`;
             
-            html += highlightElement.outerHTML;
             lastOffset = highlight.end_offset;
         });
         
@@ -2138,7 +2083,28 @@
         
         // Update the container
         articleContent.innerHTML = html;
+        
+        // Re-attach click handlers after DOM update
+        attachHighlightClickHandlers();
+        
         console.log('✅ All highlights rebuilt successfully');
+    }
+    
+    function attachHighlightClickHandlers() {
+        const articleContent = document.getElementById('articleContent');
+        if (!articleContent) return;
+        
+        const highlightElements = articleContent.querySelectorAll('.text-highlight');
+        highlightElements.forEach(element => {
+            element.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const highlightId = element.dataset.highlightId;
+                const highlightData = articleHighlights.find(h => h.id == highlightId);
+                if (highlightData) {
+                    showHighlightContextMenu(e, highlightData);
+                }
+            });
+        });
     }
     
     function escapeHtml(text) {
