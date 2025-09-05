@@ -60,15 +60,13 @@ class URLSubmissionRequest(BaseModel):
     url: HttpUrl
     name: Optional[str] = None
     description: Optional[str] = None
-    check_frequency: int = 3600  # Default 1 hour
-    collection_days: int = 90  # Default 90 days
 
 class URLSubmissionResponse(BaseModel):
     success: bool
     message: str
-    source_id: Optional[int] = None
+    article_id: Optional[int] = None
+    article_title: Optional[str] = None
     source_name: Optional[str] = None
-    articles_collected: Optional[int] = None
     errors: Optional[List[str]] = None
 
 def get_ollama_model(frontend_model: str) -> str:
@@ -401,142 +399,158 @@ async def api_toggle_source_status(source_id: int, request: Request):
 
 @app.post("/api/sources/submit-url", response_model=URLSubmissionResponse)
 async def api_submit_url(request: URLSubmissionRequest, background_tasks: BackgroundTasks):
-    """Submit a URL for blog ingestion and create a new source."""
+    """Submit a URL for single article ingestion."""
     try:
         url_str = str(request.url)
-        logger.info(f"URL submission request for: {url_str}")
+        logger.info(f"Single article submission request for: {url_str}")
+        
+        # Check if article already exists
+        existing_articles = await async_db_manager.list_articles()
+        for article in existing_articles:
+            if article.canonical_url == url_str:
+                return URLSubmissionResponse(
+                    success=False,
+                    message="This article has already been ingested",
+                    errors=[f"Article '{article.title}' already exists in the database"]
+                )
         
         # Generate source name if not provided
         if not request.name:
-            from urllib.parse import urlparse
-            parsed_url = urlparse(url_str)
-            request.name = f"User Submitted: {parsed_url.netloc}"
+            request.name = "Manual Submission"
         
-        # Generate unique identifier
+        # Parse URL for later use
+        from urllib.parse import urlparse
+        parsed_url = urlparse(url_str)
+        
+        # Create a temporary source for this single article
         import hashlib
         identifier = f"user_submitted_{hashlib.md5(url_str.encode()).hexdigest()[:8]}"
         
-        # Check if source already exists
+        # Check if we already have a user-submitted source for this domain
         existing_source = await async_db_manager.get_source_by_identifier(identifier)
-        if existing_source:
-            return URLSubmissionResponse(
-                success=False,
-                message="A source for this URL already exists",
-                errors=[f"Source '{existing_source.name}' already exists for this URL"]
+        
+        if not existing_source:
+            # Create a temporary source for user-submitted articles
+            from src.models.source import SourceCreate, SourceConfig
+            
+            config = SourceConfig(
+                allow=[parsed_url.netloc],
+                post_url_regex=[f"^{parsed_url.scheme}://{parsed_url.netloc}/.*"],
+                robots={
+                    "enabled": True,
+                    "user_agent": "CTIScraper/2.0",
+                    "respect_delay": True,
+                    "max_requests_per_minute": 5,
+                    "crawl_delay": 2.0
+                },
+                extract={
+                    "prefer_jsonld": True,
+                    "title_selectors": ["h1", "meta[property='og:title']::attr(content)", "title"],
+                    "date_selectors": [
+                        "meta[property='article:published_time']::attr(content)",
+                        "meta[name='article:published_time']::attr(content)",
+                        "time[datetime]::attr(datetime)",
+                        ".published-date",
+                        ".date"
+                    ],
+                    "body_selectors": [
+                        "article",
+                        "main",
+                        ".content",
+                        ".post-content",
+                        ".blog-content",
+                        ".entry-content"
+                    ],
+                    "author_selectors": [
+                        ".author-name",
+                        ".byline",
+                        "meta[name='author']::attr(content)",
+                        ".author"
+                    ]
+                }
             )
-        
-        # Create source configuration
-        from src.models.source import SourceCreate, SourceConfig
-        from urllib.parse import urlparse
-        
-        parsed_url = urlparse(url_str)
-        
-        # Basic configuration for web scraping
-        config = SourceConfig(
-            allow=[parsed_url.netloc],
-            post_url_regex=[f"^{parsed_url.scheme}://{parsed_url.netloc}/.*"],
-            robots={
-                "enabled": True,
-                "user_agent": "CTIScraper/2.0",
-                "respect_delay": True,
-                "max_requests_per_minute": 5,
-                "crawl_delay": 2.0
-            },
-            extract={
-                "prefer_jsonld": True,
-                "title_selectors": ["h1", "meta[property='og:title']::attr(content)", "title"],
-                "date_selectors": [
-                    "meta[property='article:published_time']::attr(content)",
-                    "meta[name='article:published_time']::attr(content)",
-                    "time[datetime]::attr(datetime)",
-                    ".published-date",
-                    ".date"
-                ],
-                "body_selectors": [
-                    "article",
-                    "main",
-                    ".content",
-                    ".post-content",
-                    ".blog-content",
-                    ".entry-content"
-                ],
-                "author_selectors": [
-                    ".author-name",
-                    ".byline",
-                    "meta[name='author']::attr(content)",
-                    ".author"
-                ]
-            },
-            collection_days=request.collection_days
-        )
-        
-        # Create source
-        source_data = SourceCreate(
-            identifier=identifier,
-            name=request.name,
-            url=url_str,
-            rss_url=None,  # Will be discovered if available
-            check_frequency=request.check_frequency,
-            active=True,
-            config=config
-        )
-        
-        # Save to database
-        new_source = await async_db_manager.create_source(source_data)
-        if not new_source:
-            return URLSubmissionResponse(
-                success=False,
-                message="Failed to create source in database",
-                errors=["Database error occurred"]
+            
+            source_data = SourceCreate(
+                identifier=identifier,
+                name=request.name,
+                url=f"{parsed_url.scheme}://{parsed_url.netloc}",
+                rss_url=None,
+                check_frequency=86400,  # Daily (won't be used for single articles)
+                active=False,  # Inactive since it's just for single articles
+                config=config
             )
+            
+            existing_source = await async_db_manager.create_source(source_data)
+            if not existing_source:
+                return URLSubmissionResponse(
+                    success=False,
+                    message="Failed to create temporary source",
+                    errors=["Database error occurred"]
+                )
         
-        # Try to discover RSS feed
-        rss_url = None
+        # Now scrape the single article
         try:
             async with HTTPClient() as http_client:
-                # Try common RSS feed paths
-                common_rss_paths = [
-                    "/feed/",
-                    "/rss/",
-                    "/rss.xml",
-                    "/feed.xml",
-                    "/atom.xml",
-                    "/feeds/posts/default",
-                    "/blog/feed/",
-                    "/blog/rss/"
-                ]
+                from src.core.modern_scraper import ModernScraper
                 
-                for path in common_rss_paths:
-                    try:
-                        test_url = f"{parsed_url.scheme}://{parsed_url.netloc}{path}"
-                        response = await http_client.get(test_url, timeout=5.0)
-                        if response.status_code == 200:
-                            content_type = response.headers.get('content-type', '').lower()
-                            if 'xml' in content_type or 'rss' in content_type or 'atom' in content_type:
-                                rss_url = test_url
-                                logger.info(f"Discovered RSS feed: {rss_url}")
-                                break
-                    except Exception:
-                        continue
+                scraper = ModernScraper(http_client)
+                
+                # Extract the single article
+                article = await scraper._extract_article(url_str, existing_source)
+                
+                if not article:
+                    return URLSubmissionResponse(
+                        success=False,
+                        message="Failed to extract article content",
+                        errors=["Could not extract article from the provided URL"]
+                    )
+                
+                # Process the article through deduplication
+                from src.core.processor import ContentProcessor
+                processor = ContentProcessor(
+                    similarity_threshold=0.85,
+                    max_age_days=365,  # Allow older articles for user submissions
+                    enable_content_enhancement=True
+                )
+                
+                # Get existing content hashes for deduplication
+                existing_hashes = await async_db_manager.get_existing_content_hashes()
+                
+                # Process the article
+                dedup_result = await processor.process_articles([article], existing_hashes)
+                
+                if not dedup_result.unique_articles:
+                    return URLSubmissionResponse(
+                        success=False,
+                        message="Article was filtered out",
+                        errors=["Article was identified as a duplicate or failed quality checks"]
+                    )
+                
+                # Save the article
+                saved_article = await async_db_manager.create_article(dedup_result.unique_articles[0])
+                
+                if not saved_article:
+                    return URLSubmissionResponse(
+                        success=False,
+                        message="Failed to save article to database",
+                        errors=["Database error occurred"]
+                    )
+                
+                return URLSubmissionResponse(
+                    success=True,
+                    message=f"Article '{saved_article.title}' successfully ingested",
+                    article_id=saved_article.id,
+                    article_title=saved_article.title,
+                    source_name=existing_source.name
+                )
+                
         except Exception as e:
-            logger.warning(f"RSS discovery failed: {e}")
-        
-        # Update source with RSS URL if found
-        if rss_url:
-            from src.models.source import SourceUpdate
-            update_data = SourceUpdate(rss_url=rss_url)
-            await async_db_manager.update_source(new_source.id, update_data)
-        
-        # Trigger immediate collection in background
-        background_tasks.add_task(collect_from_source.delay, new_source.id)
-        
-        return URLSubmissionResponse(
-            success=True,
-            message=f"Source '{request.name}' created successfully and collection started",
-            source_id=new_source.id,
-            source_name=request.name,
-            articles_collected=0
-        )
+            logger.error(f"Article extraction error: {e}")
+            return URLSubmissionResponse(
+                success=False,
+                message="Failed to extract article content",
+                errors=[str(e)]
+            )
         
     except Exception as e:
         logger.error(f"URL submission error: {e}")
@@ -2283,6 +2297,31 @@ async def api_delete_text_highlight(highlight_id: int):
         logger.error(f"Text highlight deletion error: {e}")
         logger.error(f"Text highlight deletion error traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/highlighting-logs")
+async def api_log_highlighting_action(request: Request):
+    """API endpoint for logging highlighting actions (optional server-side logging)."""
+    try:
+        log_data = await request.json()
+        
+        # Log to server logs for debugging/monitoring
+        logger.info(f"Highlighting action logged: {log_data}")
+        
+        # In a production system, you might want to store these in a database
+        # For now, we'll just acknowledge receipt
+        return {
+            "message": "Highlighting action logged successfully",
+            "logged_at": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Highlighting log error: {e}")
+        # Don't raise HTTPException here - this is optional logging
+        return {
+            "message": "Logging failed but action completed",
+            "error": str(e)
+        }
 
 
 @app.post("/api/database/backup")

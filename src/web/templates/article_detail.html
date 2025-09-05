@@ -422,6 +422,9 @@
         
         // Load existing highlights
         loadExistingHighlights();
+        
+        // Add log viewer button
+        addLogViewerButton();
     });
     
     // Classification functions
@@ -1688,6 +1691,7 @@
     // Text Highlighting Functions
     let articleHighlights = [];
     let currentSelection = null;
+    let highlightCounter = 0;
     
     function initializeTextHighlighting() {
         const articleContent = document.getElementById('articleContent');
@@ -1872,6 +1876,15 @@
         
         closeCategorizationModal();
         
+        // Log the highlighting action
+        logHighlightingAction('CREATE', {
+            text: text,
+            startOffset: start,
+            endOffset: end,
+            isHuntable: isHuntable,
+            timestamp: new Date().toISOString()
+        });
+        
         try {
             const response = await fetch(`/api/articles/{{ article.id }}/highlights`, {
                 method: 'POST',
@@ -1889,6 +1902,9 @@
             if (response.ok) {
                 const data = await response.json();
                 
+                // Add highlight to persistent storage
+                saveHighlightToStorage(data.highlight);
+                
                 // Add highlight to the page
                 addHighlightToPage(data.highlight);
                 
@@ -1905,6 +1921,61 @@
             console.error('Categorization error:', error);
             showNotification(`Error: ${error.message}`, 'error');
         }
+    }
+    
+    // Logging function for highlighting actions
+    function logHighlightingAction(action, data) {
+        const logEntry = {
+            id: ++highlightCounter,
+            action: action,
+            articleId: {{ article.id }},
+            timestamp: new Date().toISOString(),
+            data: data
+        };
+        
+        // Store in localStorage for persistence
+        const logs = JSON.parse(localStorage.getItem('highlightingLogs') || '[]');
+        logs.push(logEntry);
+        localStorage.setItem('highlightingLogs', JSON.stringify(logs));
+        
+        // Also log to console for debugging
+        console.log(`🎯 Highlight Action #${logEntry.id}:`, action, data);
+        
+        // Send to server for permanent logging (optional)
+        fetch('/api/highlighting-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(logEntry)
+        }).catch(err => console.log('Server logging failed:', err));
+    }
+    
+    // Save highlight to localStorage for persistence
+    function saveHighlightToStorage(highlight) {
+        const articleId = {{ article.id }};
+        const storageKey = `highlights_${articleId}`;
+        const highlights = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        
+        // Check if highlight already exists (avoid duplicates)
+        const exists = highlights.some(h => 
+            h.start_offset === highlight.start_offset && 
+            h.end_offset === highlight.end_offset
+        );
+        
+        if (!exists) {
+            highlights.push(highlight);
+            localStorage.setItem(storageKey, JSON.stringify(highlights));
+            console.log('💾 Highlight saved to localStorage:', highlight);
+        }
+    }
+    
+    // Load highlights from localStorage
+    function loadHighlightsFromStorage() {
+        const articleId = {{ article.id }};
+        const storageKey = `highlights_${articleId}`;
+        const highlights = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        
+        console.log('📂 Loaded highlights from localStorage:', highlights.length);
+        return highlights;
     }
     
     function addHighlightToPage(highlight) {
@@ -1956,15 +2027,39 @@
     
     async function loadExistingHighlights() {
         try {
+            // First load from localStorage for immediate display
+            const localHighlights = loadHighlightsFromStorage();
+            articleHighlights = localHighlights;
+            
+            // Add local highlights to the page immediately
+            localHighlights.forEach(highlight => {
+                addHighlightToPage(highlight);
+            });
+            
+            console.log('🎯 Local highlights loaded:', localHighlights.length);
+            
+            // Then sync with server
             const response = await fetch(`/api/articles/{{ article.id }}/highlights`);
             if (response.ok) {
                 const data = await response.json();
-                articleHighlights = data.highlights;
+                const serverHighlights = data.highlights;
                 
-                // Add highlights to the page
-                data.highlights.forEach(highlight => {
-                    addHighlightToPage(highlight);
+                // Merge server highlights with local ones (avoid duplicates)
+                const mergedHighlights = [...localHighlights];
+                serverHighlights.forEach(serverHighlight => {
+                    const exists = mergedHighlights.some(h => 
+                        h.start_offset === serverHighlight.start_offset && 
+                        h.end_offset === serverHighlight.end_offset
+                    );
+                    if (!exists) {
+                        mergedHighlights.push(serverHighlight);
+                        addHighlightToPage(serverHighlight);
+                    }
                 });
+                
+                articleHighlights = mergedHighlights;
+                console.log('🎯 Server highlights synced:', serverHighlights.length);
+                console.log('🎯 Total highlights:', articleHighlights.length);
             }
         } catch (error) {
             console.error('Error loading highlights:', error);
@@ -2038,6 +2133,13 @@
     async function toggleHighlightCategory(highlightId, newIsHuntable) {
         closeHighlightContextModal();
         
+        // Log the action
+        logHighlightingAction('TOGGLE', {
+            highlightId: highlightId,
+            newIsHuntable: newIsHuntable,
+            timestamp: new Date().toISOString()
+        });
+        
         try {
             const response = await fetch(`/api/highlights/${highlightId}`, {
                 method: 'PUT',
@@ -2051,6 +2153,9 @@
             
             if (response.ok) {
                 const data = await response.json();
+                
+                // Update in localStorage
+                updateHighlightInStorage(data.highlight);
                 
                 // Update the highlight on the page
                 updateHighlightOnPage(data.highlight);
@@ -2073,12 +2178,21 @@
             return;
         }
         
+        // Log the action
+        logHighlightingAction('DELETE', {
+            highlightId: highlightId,
+            timestamp: new Date().toISOString()
+        });
+        
         try {
             const response = await fetch(`/api/highlights/${highlightId}`, {
                 method: 'DELETE'
             });
             
             if (response.ok) {
+                // Remove from localStorage
+                removeHighlightFromStorage(highlightId);
+                
                 // Remove highlight from the page
                 removeHighlightFromPage(highlightId);
                 
@@ -2093,6 +2207,31 @@
         }
     }
     
+    // Update highlight in localStorage
+    function updateHighlightInStorage(highlight) {
+        const articleId = {{ article.id }};
+        const storageKey = `highlights_${articleId}`;
+        const highlights = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        
+        const index = highlights.findIndex(h => h.id === highlight.id);
+        if (index !== -1) {
+            highlights[index] = highlight;
+            localStorage.setItem(storageKey, JSON.stringify(highlights));
+            console.log('💾 Highlight updated in localStorage:', highlight);
+        }
+    }
+    
+    // Remove highlight from localStorage
+    function removeHighlightFromStorage(highlightId) {
+        const articleId = {{ article.id }};
+        const storageKey = `highlights_${articleId}`;
+        const highlights = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        
+        const filteredHighlights = highlights.filter(h => h.id !== highlightId);
+        localStorage.setItem(storageKey, JSON.stringify(filteredHighlights));
+        console.log('🗑️ Highlight removed from localStorage:', highlightId);
+    }
+    
     function updateHighlightOnPage(highlight) {
         const highlightElement = document.querySelector(`[data-highlight-id="${highlight.id}"]`);
         if (highlightElement) {
@@ -2104,12 +2243,84 @@
         }
     }
     
-    function removeHighlightFromPage(highlightId) {
-        const highlightElement = document.querySelector(`[data-highlight-id="${highlightId}"]`);
-        if (highlightElement) {
-            // Replace highlight element with just the text
-            const textNode = document.createTextNode(highlightElement.textContent);
-            highlightElement.parentNode.replaceChild(textNode, highlightElement);
+    // Display highlighting logs
+    function showHighlightingLogs() {
+        const logs = JSON.parse(localStorage.getItem('highlightingLogs') || '[]');
+        const articleLogs = logs.filter(log => log.articleId === {{ article.id }});
+        
+        console.log('📊 Highlighting Logs for Article {{ article.id }}:', articleLogs);
+        
+        // Create a simple log display
+        const logModal = document.createElement('div');
+        logModal.id = 'highlightLogModal';
+        logModal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50';
+        logModal.innerHTML = `
+            <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white dark:bg-gray-800">
+                <div class="mt-3">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                        🎯 Highlighting Activity Log
+                    </h3>
+                    <div class="max-h-96 overflow-y-auto">
+                        ${articleLogs.length === 0 ? 
+                            '<p class="text-gray-500 dark:text-gray-400">No highlighting actions recorded yet.</p>' :
+                            articleLogs.map(log => `
+                                <div class="mb-3 p-3 bg-gray-50 dark:bg-gray-700 rounded border">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <span class="font-medium text-sm">Action #${log.id}: ${log.action}</span>
+                                            <span class="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                                                ${new Date(log.timestamp).toLocaleString()}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                                        ${log.action === 'CREATE' ? 
+                                            `Text: "${log.data.text.substring(0, 50)}${log.data.text.length > 50 ? '...' : ''}"<br>
+                                             Range: ${log.data.startOffset}-${log.data.endOffset}<br>
+                                             Category: ${log.data.isHuntable ? 'Huntable' : 'Not Huntable'}` :
+                                            log.action === 'TOGGLE' ?
+                                            `Highlight ID: ${log.data.highlightId}<br>
+                                             New Category: ${log.data.newIsHuntable ? 'Huntable' : 'Not Huntable'}` :
+                                            `Highlight ID: ${log.data.highlightId}`
+                                        }
+                                    </div>
+                                </div>
+                            `).join('')
+                        }
+                    </div>
+                    <div class="mt-4 flex justify-end">
+                        <button onclick="closeHighlightLogModal()" 
+                                class="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(logModal);
+    }
+    
+    function closeHighlightLogModal() {
+        const modal = document.getElementById('highlightLogModal');
+        if (modal) {
+            modal.remove();
+        }
+    }
+    
+    // Add a button to view logs in the article header
+    function addLogViewerButton() {
+        const articleHeader = document.querySelector('.max-w-4xl.mx-auto.px-4.py-8');
+        if (articleHeader) {
+            const logButton = document.createElement('button');
+            logButton.innerHTML = '📊 View Highlight Logs';
+            logButton.className = 'ml-4 px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors';
+            logButton.onclick = showHighlightingLogs;
+            
+            const headerDiv = articleHeader.querySelector('div');
+            if (headerDiv) {
+                headerDiv.appendChild(logButton);
+            }
         }
     }
     
