@@ -44,6 +44,65 @@ class HybridIOCExtractor:
         self.use_llm_validation = use_llm_validation
         self.iocextract = iocextract
         
+    def _is_ip_address(self, domain: str) -> bool:
+        """
+        Check if a domain string is actually an IP address.
+        
+        Args:
+            domain: Domain string to check
+            
+        Returns:
+            True if it's an IP address, False otherwise
+        """
+        try:
+            # Split by dots and check if all parts are numeric
+            parts = domain.split('.')
+            if len(parts) != 4:
+                return False
+            
+            for part in parts:
+                if not part.isdigit() or int(part) > 255:
+                    return False
+            return True
+        except:
+            return False
+    
+    def _detect_hash_type(self, hash_value: str) -> str:
+        """
+        Detect the type of hash based on its length and character pattern.
+        
+        Args:
+            hash_value: Hash string to analyze
+            
+        Returns:
+            Hash type (MD5, SHA1, SHA256, etc.) or "Unknown"
+        """
+        if not hash_value:
+            return "Unknown"
+        
+        # Remove any whitespace and convert to lowercase
+        hash_value = hash_value.strip().lower()
+        
+        # Check for common hash patterns
+        if len(hash_value) == 32 and all(c in '0123456789abcdef' for c in hash_value):
+            return "MD5"
+        elif len(hash_value) == 40 and all(c in '0123456789abcdef' for c in hash_value):
+            return "SHA1"
+        elif len(hash_value) == 64 and all(c in '0123456789abcdef' for c in hash_value):
+            return "SHA256"
+        elif len(hash_value) == 128 and all(c in '0123456789abcdef' for c in hash_value):
+            return "SHA512"
+        elif len(hash_value) == 56 and all(c in '0123456789abcdef' for c in hash_value):
+            return "SHA224"
+        elif len(hash_value) == 96 and all(c in '0123456789abcdef' for c in hash_value):
+            return "SHA384"
+        elif len(hash_value) == 8 and all(c in '0123456789abcdef' for c in hash_value):
+            return "CRC32"
+        elif len(hash_value) == 16 and all(c in '0123456789abcdef' for c in hash_value):
+            return "CRC64"
+        else:
+            return "Unknown"
+        
     def get_ollama_model(self, ai_model: str) -> str:
         """Get the Ollama model name from the AI model setting."""
         model_mapping = {
@@ -64,19 +123,17 @@ class HybridIOCExtractor:
             Dictionary of IOC types and their values
         """
         try:
-            # Extract different types of IOCs
+            # Extract different types of IOCs (atomic IOCs only)
             raw_iocs = {
                 'ip': list(self.iocextract.extract_ips(content, refang=True)),
-                'domain': list(self.iocextract.extract_urls(content, refang=True)),
+                'domain': [],  # Will be populated from URLs below
                 'url': list(self.iocextract.extract_urls(content, refang=True)),
                 'email': list(self.iocextract.extract_emails(content, refang=True)),
                 'file_hash': list(self.iocextract.extract_hashes(content)),
                 'registry_key': [],  # iocextract doesn't support registry keys
                 'file_path': [],     # iocextract doesn't support file paths
                 'mutex': [],         # iocextract doesn't support mutexes
-                'named_pipe': [],    # iocextract doesn't support named pipes
-                'process_cmdline': [], # iocextract doesn't support process/cmdline
-                'event_id': []       # iocextract doesn't support event IDs
+                'named_pipe': []     # iocextract doesn't support named pipes
             }
             
             # Clean up duplicates and empty lists
@@ -89,9 +146,21 @@ class HybridIOCExtractor:
                     if value not in seen:
                         unique_values.append(value)
                         seen.add(value)
-                cleaned_iocs[ioc_type] = unique_values
+                
+                # Special processing for file hashes to include hash type
+                if ioc_type == 'file_hash':
+                    processed_hashes = []
+                    for hash_value in unique_values:
+                        hash_type = self._detect_hash_type(hash_value)
+                        processed_hashes.append({
+                            'value': hash_value,
+                            'type': hash_type
+                        })
+                    cleaned_iocs[ioc_type] = processed_hashes
+                else:
+                    cleaned_iocs[ioc_type] = unique_values
             
-            # Extract domains from URLs
+            # Extract domains from URLs, filtering out IP addresses
             if cleaned_iocs['url']:
                 domains = []
                 for url in cleaned_iocs['url']:
@@ -101,8 +170,15 @@ class HybridIOCExtractor:
                             domain = url.split('://')[1].split('/')[0]
                         else:
                             domain = url.split('/')[0]
-                        if domain and domain not in domains:
-                            domains.append(domain)
+                        
+                        # Remove port numbers if present
+                        if ':' in domain:
+                            domain = domain.split(':')[0]
+                        
+                        # Check if it's an IP address (contains only digits and dots)
+                        if domain and not self._is_ip_address(domain):
+                            if domain not in domains:
+                                domains.append(domain)
                     except:
                         continue
                 cleaned_iocs['domain'] = domains
@@ -114,8 +190,7 @@ class HybridIOCExtractor:
             logger.error(f"Error extracting raw IOCs: {e}")
             return {
                 'ip': [], 'domain': [], 'url': [], 'email': [], 'file_hash': [],
-                'registry_key': [], 'file_path': [], 'mutex': [], 'named_pipe': [],
-                'process_cmdline': [], 'event_id': []
+                'registry_key': [], 'file_path': [], 'mutex': [], 'named_pipe': []
             }
     
     async def validate_with_llm(self, raw_iocs: Dict[str, List[str]], content: str, api_key: str, ai_model: str = 'chatgpt') -> Dict[str, List[str]]:
@@ -142,10 +217,12 @@ CRITICAL: Return ONLY valid JSON. Do not include any explanatory text, comments,
 
 Rules:
 - Validate that IOCs are actually malicious/relevant to threats
-- Categorize IOCs into appropriate types (IP, Domain, URL, File Hash, Registry Key, File Path, Email, Mutex, Named Pipe, Process/Command-Line, Event ID)
+- Focus ONLY on atomic IOCs: IP, Domain, URL, File Hash, Registry Key, File Path, Email, Mutex, Named Pipe
 - Remove false positives and non-malicious IOCs
 - Normalize values (lowercase domains, full paths, valid hash lengths)
+- For file hashes, preserve the hash type information if provided
 - Return empty arrays for categories with no valid IOCs
+- Do NOT include behavioral patterns like process command lines or event IDs
 
 Raw IOCs extracted:
 {json.dumps(raw_iocs, indent=2)}
@@ -154,6 +231,9 @@ Original content context:
 {content[:2000]}...
 
 Output format (return ONLY this JSON structure):
+For file hashes, use objects with "value" and "type" fields: {{"value": "hash_string", "type": "MD5"}}
+For other IOCs, use simple strings: "value"
+
 {{
   "ip": [],
   "domain": [],
@@ -163,9 +243,7 @@ Output format (return ONLY this JSON structure):
   "file_path": [],
   "email": [],
   "mutex": [],
-  "named_pipe": [],
-  "process_cmdline": [],
-  "event_id": []
+  "named_pipe": []
 }}"""
 
             # Use the selected model

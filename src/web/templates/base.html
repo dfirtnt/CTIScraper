@@ -10,6 +10,11 @@
     
     <!-- Tailwind CSS via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
     
     <!-- HTMX for dynamic interactions -->
     <script src="https://unpkg.com/htmx.org@1.9.6"></script>
@@ -22,12 +27,18 @@
         .gradient-bg {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
+        .dark .gradient-bg {
+            background: linear-gradient(135deg, #4c1d95 0%, #581c87 100%);
+        }
         .card-hover {
             transition: all 0.3s ease;
         }
         .card-hover:hover {
             transform: translateY(-2px);
             box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .dark .card-hover:hover {
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
         }
         .quality-excellent { background-color: #10b981; }
         .quality-good { background-color: #3b82f6; }
@@ -36,9 +47,14 @@
         .priority-high { background-color: #ef4444; }
         .priority-medium { background-color: #f59e0b; }
         .priority-low { background-color: #10b981; }
+        
+        /* Dark mode transitions */
+        * {
+            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+        }
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="bg-gray-50 dark:bg-gray-900 min-h-screen">
     <!-- Navigation -->
     <nav class="gradient-bg text-white shadow-lg">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -58,13 +74,25 @@
                             <a href="/sources" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors">
                                 Sources
                             </a>
+                            <a href="/health" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors">
+                                🏥 Health
+                            </a>
                             <a href="/settings" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors">
                                 ⚙️ Settings
                             </a>
                         </div>
                     </div>
                 </div>
-                <div class="flex items-center">
+                <div class="flex items-center space-x-4">
+                    <!-- Dark Mode Toggle -->
+                    <button id="darkModeToggle" class="p-2 rounded-md text-white hover:bg-white hover:bg-opacity-20 transition-colors" title="Toggle Dark Mode">
+                        <svg id="sunIcon" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"></path>
+                        </svg>
+                        <svg id="moonIcon" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
+                        </svg>
+                    </button>
                     <div class="text-sm text-white opacity-75">
                         Threat Intelligence Platform
                     </div>
@@ -74,14 +102,14 @@
     </nav>
 
     <!-- Main Content -->
-    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 text-gray-900 dark:text-gray-100">
         {% block content %}{% endblock %}
     </main>
 
     <!-- Footer -->
-    <footer class="bg-gray-800 text-white mt-16">
+    <footer class="bg-gray-800 dark:bg-gray-950 text-white mt-16">
         <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-            <div class="text-center text-sm text-gray-300">
+            <div class="text-center text-sm text-gray-300 dark:text-gray-400">
                 <p>&copy; 2025 CTI Scraper. Modern threat intelligence aggregation and analysis platform.</p>
                 <p class="mt-2">Built with FastAPI, Python, and modern web technologies.</p>
             </div>
@@ -90,6 +118,50 @@
 
     <!-- JavaScript -->
     <script>
+        // Dark mode functionality
+        function initDarkMode() {
+            const darkModeToggle = document.getElementById('darkModeToggle');
+            const sunIcon = document.getElementById('sunIcon');
+            const moonIcon = document.getElementById('moonIcon');
+            const html = document.documentElement;
+            
+            // Check for saved theme preference or default to light mode
+            const savedTheme = localStorage.getItem('theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const isDark = savedTheme === 'dark' || (!savedTheme && prefersDark);
+            
+            // Apply theme
+            if (isDark) {
+                html.classList.add('dark');
+                sunIcon.classList.remove('hidden');
+                moonIcon.classList.add('hidden');
+            } else {
+                html.classList.remove('dark');
+                sunIcon.classList.add('hidden');
+                moonIcon.classList.remove('hidden');
+            }
+            
+            // Toggle function
+            darkModeToggle.addEventListener('click', () => {
+                const isDarkMode = html.classList.contains('dark');
+                
+                if (isDarkMode) {
+                    html.classList.remove('dark');
+                    sunIcon.classList.add('hidden');
+                    moonIcon.classList.remove('hidden');
+                    localStorage.setItem('theme', 'light');
+                } else {
+                    html.classList.add('dark');
+                    sunIcon.classList.remove('hidden');
+                    moonIcon.classList.add('hidden');
+                    localStorage.setItem('theme', 'dark');
+                }
+            });
+        }
+        
+        // Initialize dark mode when DOM is loaded
+        document.addEventListener('DOMContentLoaded', initDarkMode);
+
         // Global utility functions
         function formatDate(dateString) {
             if (!dateString) return 'Unknown';
