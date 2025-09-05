@@ -54,6 +54,53 @@
             </div>
         </div>
 
+        <!-- Network Access Settings -->
+        <div class="bg-white rounded-lg shadow-sm p-6">
+            <h2 class="text-xl font-bold text-gray-900 mb-4">🌐 Network Access Settings</h2>
+            
+            <div class="space-y-4">
+                <!-- External Access Toggle -->
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-900">External Network Access</h3>
+                        <p class="text-sm text-gray-600">Allow access from other devices on your network (e.g., iPhone, iPad)</p>
+                    </div>
+                    <div class="flex items-center">
+                        <button id="externalAccessToggle" 
+                                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                role="switch" aria-checked="false">
+                            <span class="sr-only">Enable external network access</span>
+                            <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"></span>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Network Access Information -->
+                <div id="networkAccessInfo" class="p-3 bg-blue-50 border border-blue-200 rounded-md" style="display: none;">
+                    <div class="text-sm text-blue-800">
+                        <p class="font-medium mb-2">📱 Access from iPhone/iPad:</p>
+                        <div class="space-y-1">
+                            <p><strong>Local Access:</strong> <span id="localUrl">http://192.168.1.100:8000</span></p>
+                            <p><strong>Status:</strong> <span id="accessStatus" class="text-green-600">Ready for external access</span></p>
+                            <p class="text-xs mt-2">💡 Make sure your iPhone is connected to the same Wi-Fi network</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Security Warning -->
+                <div class="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <div class="text-sm text-yellow-800">
+                        <p class="font-medium mb-1">⚠️ Security Notice:</p>
+                        <ul class="list-disc list-inside space-y-1">
+                            <li>External access allows any device on your network to connect</li>
+                            <li>Only enable this on trusted networks (home/office)</li>
+                            <li>Consider using a VPN for remote access</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- AI Model Configuration -->
         <div class="bg-white rounded-lg shadow-sm p-6">
             <h2 class="text-xl font-bold text-gray-900 mb-4">🤖 AI Assistant Configuration</h2>
@@ -208,6 +255,11 @@
         const sigmaAuthor = settings.sigmaAuthor || '';
         document.getElementById('sigmaAuthor').value = sigmaAuthor;
         
+        // Set external access toggle
+        const externalAccessEnabled = settings.externalAccessEnabled || false;
+        setToggleState('externalAccessToggle', externalAccessEnabled);
+        updateNetworkAccessInfo(externalAccessEnabled);
+        
         // Update API Configuration section visibility
         updateApiConfigurationVisibility();
     }
@@ -224,6 +276,39 @@
         }
     }
     
+    // Update network access information display
+    function updateNetworkAccessInfo(enabled) {
+        const infoDiv = document.getElementById('networkAccessInfo');
+        const statusElement = document.getElementById('accessStatus');
+        
+        if (enabled) {
+            infoDiv.style.display = 'block';
+            statusElement.textContent = 'Ready for external access';
+            statusElement.className = 'text-green-600';
+            
+            // Try to get the actual local IP address
+            getLocalIPAddress();
+        } else {
+            infoDiv.style.display = 'none';
+        }
+    }
+    
+    // Get local IP address for display
+    async function getLocalIPAddress() {
+        try {
+            // This is a simple way to get the local IP
+            // In a real implementation, you might want to use a more sophisticated method
+            const response = await fetch('/api/network-info');
+            if (response.ok) {
+                const data = await response.json();
+                document.getElementById('localUrl').textContent = `http://${data.local_ip}:8000`;
+            }
+        } catch (error) {
+            // Fallback to a generic IP
+            document.getElementById('localUrl').textContent = 'http://192.168.1.100:8000';
+        }
+    }
+    
     // Save settings to localStorage
     function saveSettings() {
         const settings = {
@@ -231,7 +316,8 @@
             articlesPerPage: document.getElementById('articlesPerPage').value,
             openaiApiKey: document.getElementById('openaiApiKey').value,
             aiModel: document.getElementById('aiModel').value,
-            sigmaAuthor: document.getElementById('sigmaAuthor').value
+            sigmaAuthor: document.getElementById('sigmaAuthor').value,
+            externalAccessEnabled: getToggleState('externalAccessToggle')
         };
         
         localStorage.setItem('ctiScraperSettings', JSON.stringify(settings));
@@ -402,6 +488,13 @@
         // Comment prompts toggle
         document.getElementById('commentPromptsToggle').addEventListener('click', function() {
             toggleSwitch('commentPromptsToggle');
+        });
+        
+        // External access toggle
+        document.getElementById('externalAccessToggle').addEventListener('click', function() {
+            toggleSwitch('externalAccessToggle');
+            const enabled = getToggleState('externalAccessToggle');
+            updateNetworkAccessInfo(enabled);
         });
         
         // AI model selection

@@ -56,6 +56,8 @@ services:
       - LLM_TEMPERATURE=0.3
       - LLM_MAX_TOKENS=2048
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - HOST=0.0.0.0
+      - PORT=8000
     ports:
       - "8000:8000"
     volumes:

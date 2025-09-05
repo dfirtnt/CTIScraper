@@ -351,6 +351,49 @@ async def api_search_help():
     """Get search syntax help."""
     return {"help_text": get_search_help_text()}
 
+@app.get("/api/network-info")
+async def api_network_info():
+    """Get network information for external access."""
+    import socket
+    import subprocess
+    import platform
+    
+    try:
+        # Try to get the local IP address
+        # Method 1: Connect to a remote address to determine local IP
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            # Connect to a remote address (doesn't actually send data)
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+        except Exception:
+            # Fallback method
+            local_ip = "192.168.1.100"
+        finally:
+            s.close()
+        
+        # Get system info
+        system_info = {
+            "local_ip": local_ip,
+            "port": 8000,
+            "platform": platform.system(),
+            "hostname": socket.gethostname(),
+            "access_url": f"http://{local_ip}:8000"
+        }
+        
+        return system_info
+        
+    except Exception as e:
+        logger.error(f"Error getting network info: {e}")
+        # Return fallback info
+        return {
+            "local_ip": "192.168.1.100",
+            "port": 8000,
+            "platform": "Unknown",
+            "hostname": "Unknown",
+            "access_url": "http://192.168.1.100:8000"
+        }
+
 # Articles management
 @app.get("/articles", response_class=HTMLResponse)
 async def articles_list(
