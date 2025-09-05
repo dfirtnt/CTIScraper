@@ -31,7 +31,7 @@ sphinx-rtd-theme==2.0.0
 myst-parser==3.0.1
 
 # Performance Testing
-locust==3.0.0
+locust==2.40.1
 pytest-benchmark==4.0.0
 
 # Security Testing
