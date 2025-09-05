@@ -20,6 +20,9 @@ class SourceConfig(BaseModel):
     
     # Legacy fallback
     content_selector: Optional[str] = Field(None, description="Legacy content selector")
+    
+    # Collection settings
+    collection_days: Optional[int] = Field(None, description="Historical collection period in days")
 
 
 class DiscoveryStrategy(BaseModel):

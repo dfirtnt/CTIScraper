@@ -17,7 +17,9 @@ WINDOWS_MALWARE_KEYWORDS = {
         'hklm', 'appdata', 'programdata', 'powershell.exe', 'wbem',
         'EventID', '.lnk', 'D:\\', '.iso', '<Command>', 'MZ',
         'svchost', '-accepteula', 'lsass.exe', 'WINDIR', 'wintmp',
-        '\\temp\\', '\\pipe\\', '%WINDIR%', '%wintmp%'
+        '\\temp\\', '\\pipe\\', '%WINDIR%', '%wintmp%',
+        'FromBase64String', 'GzipStream', 'MemoryStream', 'New-Object',
+        'kubectl', 'sysvol', 'netlogon', 'DownloadString', 'command line'
     ],
     # Good discriminators (high Chosen ratio)
     'good_discriminators': [
@@ -592,6 +594,14 @@ class ThreatHuntingScorer:
                 pattern = r'lsass\.exe'
             elif keyword == 'powershell.exe':
                 pattern = r'powershell\.exe'
+            elif keyword == 'command line':
+                pattern = r'command\s+line'
+            elif keyword in ['FromBase64String', 'GzipStream', 'MemoryStream', 'New-Object', 'DownloadString']:
+                # PowerShell cmdlets - case insensitive with word boundaries
+                pattern = r'\b' + re.escape(keyword) + r'\b'
+            elif keyword in ['kubectl', 'sysvol', 'netlogon']:
+                # Case insensitive with word boundaries
+                pattern = r'\b' + re.escape(keyword) + r'\b'
             # Handle LOLBAS executables (case-insensitive, word boundaries)
             elif keyword.endswith('.exe'):
                 # Remove .exe extension for matching

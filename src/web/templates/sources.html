@@ -136,8 +136,18 @@
     <!-- Sources List -->
     <div class="bg-white rounded-lg shadow-sm">
         <div class="px-6 py-4 border-b border-gray-200">
-            <h3 class="text-lg font-medium text-gray-900">Configured Sources</h3>
-            <p class="text-sm text-gray-500">All threat intelligence sources and their current status</p>
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-medium text-gray-900">Configured Sources</h3>
+                    <p class="text-sm text-gray-500">All threat intelligence sources and their current status</p>
+                </div>
+                <div class="text-right">
+                    <div class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        <span class="mr-1">📊</span>
+                        Sorted by Acceptance Rate
+                    </div>
+                </div>
+            </div>
         </div>
 
         {% if sources %}
@@ -167,11 +177,17 @@
                             {% endif %}
                         </div>
 
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-3">
                             <div>
                                 <p class="text-sm text-gray-500">Collection Method</p>
                                 <p class="text-sm font-medium text-gray-900">
                                     {% if source.rss_url %}RSS Feed{% else %}Web Scraping{% endif %}
+                                </p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Collection Period</p>
+                                <p class="text-sm font-medium text-gray-900">
+                                    {% if source.config and source.config.collection_days %}{{ source.config.collection_days }} days{% else %}90 days (default){% endif %}
                                 </p>
                             </div>
                             <div>
@@ -190,7 +206,17 @@
                         {% if source.id in quality_stats and quality_stats[source.id].total_articles > 0 %}
                         {% set stat = quality_stats[source.id] %}
                         <div class="bg-gray-50 rounded-lg p-3 mb-3">
-                            <h5 class="text-sm font-medium text-gray-700 mb-2">📊 Quality Metrics</h5>
+                            <div class="flex items-center justify-between mb-2">
+                                <h5 class="text-sm font-medium text-gray-700">📊 Quality Metrics</h5>
+                                <div class="text-right">
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium 
+                                                 {% if stat.acceptance_rate >= 80 %}bg-green-100 text-green-800
+                                                 {% elif stat.acceptance_rate >= 60 %}bg-yellow-100 text-yellow-800
+                                                 {% else %}bg-red-100 text-red-800{% endif %}">
+                                        {{ stat.acceptance_rate }}% Acceptance Rate
+                                    </span>
+                                </div>
+                            </div>
                             <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                                 <div>
                                     <p class="text-xs text-gray-500">Total Articles</p>
@@ -220,9 +246,9 @@
                         {% endif %}
 
                         <div class="flex items-center space-x-2">
-                            <button onclick="toggleSourceStatus({{ source.id }})" class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                            <button onclick="showActivationModal({{ source.id }}, '{{ source.name }}', {{ source.active|lower }})" class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
                                 <span class="mr-2">⚙️</span>
-                                Edit
+                                {% if source.active %}Deactivate{% else %}Activate{% endif %}
                             </button>
 
                             <button onclick="showSourceStats({{ source.id }})" class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
@@ -299,6 +325,39 @@
     </div>
 </div>
 
+<!-- Activation Modal -->
+<div id="activationModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+            <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+        </div>
+        <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div class="flex items-start">
+                    <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900" id="activationModalTitle">
+                            Source Activation
+                        </h3>
+                        <div class="mt-4">
+                            <div id="activationModalContent" class="text-sm text-gray-500">
+                                <!-- Content will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button type="button" onclick="confirmActivation()" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm">
+                    Confirm
+                </button>
+                <button type="button" onclick="closeActivationModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal for displaying results -->
 <div id="resultModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
     <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
@@ -330,54 +389,63 @@
 </div>
 
 <script>
+// Global variables for activation modal
+let currentSourceId = null;
+let currentSourceName = null;
+let currentSourceActive = null;
 
-
-async function showSourceStats(sourceId) {
-    try {
-        showLoadingModal('Loading Stats', 'Fetching source statistics...');
-        
-        const response = await fetch(`/api/sources/${sourceId}/stats`);
-        const stats = await response.json();
-        
-        if (response.ok) {
-            let content = `<div class="space-y-3">`;
-            content += `<p><strong>Source:</strong> ${stats.source_name}</p>`;
-            content += `<p><strong>Status:</strong> <span class="${stats.active ? 'text-green-600' : 'text-red-600'}">${stats.active ? 'Active' : 'Inactive'}</span></p>`;
-            content += `<p><strong>Collection Method:</strong> ${stats.collection_method}</p>`;
-            content += `<p><strong>Total Articles:</strong> ${stats.total_articles}</p>`;
-            content += `<p><strong>Average Content Length:</strong> ${stats.avg_content_length} characters</p>`;
-            content += `<p><strong>Average Quality Score:</strong> ${stats.avg_quality_score}/75</p>`;
-            content += `<p><strong>Last Check:</strong> ${stats.last_check ? new Date(stats.last_check).toLocaleString() : 'Never'}</p>`;
-            
-            if (Object.keys(stats.articles_by_date).length > 0) {
-                content += `<div class="mt-4"><strong>Recent Activity:</strong></div>`;
-                content += `<div class="max-h-32 overflow-y-auto">`;
-                const sortedDates = Object.keys(stats.articles_by_date).sort().reverse().slice(0, 10);
-                for (const date of sortedDates) {
-                    content += `<p class="text-xs">${date}: ${stats.articles_by_date[date]} articles</p>`;
-                }
-                content += `</div>`;
-            }
-            content += `</div>`;
-            
-            showModal('Source Statistics', content);
-        } else {
-            showModal('Stats Error', `<p class="text-red-600">Failed to load stats: ${stats.detail || 'Unknown error'}</p>`);
-        }
-    } catch (error) {
-        showModal('Stats Error', `<p class="text-red-600">Error loading stats: ${error.message}</p>`);
+function showActivationModal(sourceId, sourceName, isActive) {
+    currentSourceId = sourceId;
+    currentSourceName = sourceName;
+    currentSourceActive = isActive;
+    
+    const action = isActive ? 'Deactivate' : 'Activate';
+    document.getElementById('activationModalTitle').textContent = `${action} Source`;
+    
+    let content = `<div class="space-y-4">`;
+    content += `<p><strong>Source:</strong> ${sourceName}</p>`;
+    content += `<p><strong>Action:</strong> ${action}</p>`;
+    
+    if (!isActive) {
+        content += `<div class="mt-4">`;
+        content += `<label for="collectionDays" class="block text-sm font-medium text-gray-700 mb-2">Historical Collection Period</label>`;
+        content += `<div class="flex items-center space-x-2">`;
+        content += `<input type="number" id="collectionDays" min="1" max="365" value="90" class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">`;
+        content += `<span class="text-sm text-gray-500">days</span>`;
+        content += `</div>`;
+        content += `<p class="text-xs text-gray-500 mt-1">How far back to collect articles from this source (1-365 days)</p>`;
+        content += `</div>`;
     }
+    
+    content += `</div>`;
+    
+    document.getElementById('activationModalContent').innerHTML = content;
+    document.getElementById('activationModal').classList.remove('hidden');
 }
 
-async function toggleSourceStatus(sourceId) {
+function closeActivationModal() {
+    document.getElementById('activationModal').classList.add('hidden');
+    currentSourceId = null;
+    currentSourceName = null;
+    currentSourceActive = null;
+}
+
+async function confirmActivation() {
+    if (!currentSourceId) return;
+    
     try {
-        showLoadingModal('Updating Source', 'Toggling source status...');
+        showLoadingModal('Updating Source', 'Processing source activation...');
         
-        const response = await fetch(`/api/sources/${sourceId}/toggle`, {
+        const collectionDays = currentSourceActive ? null : document.getElementById('collectionDays').value;
+        
+        const response = await fetch(`/api/sources/${currentSourceId}/toggle`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-            }
+            },
+            body: JSON.stringify({
+                collection_days: collectionDays ? parseInt(collectionDays) : null
+            })
         });
         
         const result = await response.json();
@@ -387,6 +455,11 @@ async function toggleSourceStatus(sourceId) {
             content += `<p><strong>Source:</strong> ${result.source_name}</p>`;
             content += `<p><strong>Previous Status:</strong> ${result.old_status ? 'Active' : 'Inactive'}</p>`;
             content += `<p><strong>New Status:</strong> <span class="${result.new_status ? 'text-green-600' : 'text-red-600'}">${result.new_status ? 'Active' : 'Inactive'}</span></p>`;
+            
+            if (collectionDays && result.collection_days) {
+                content += `<p><strong>Collection Period:</strong> ${result.collection_days} days</p>`;
+            }
+            
             content += `<p class="text-sm text-gray-500">${result.message}</p>`;
             
             if (result.success) {
@@ -403,6 +476,7 @@ async function toggleSourceStatus(sourceId) {
             content += `</div>`;
             
             showModal('Source Status Updated', content);
+            closeActivationModal();
             
             // Auto-refresh the page if database was updated
             if (result.database_updated) {
@@ -442,6 +516,52 @@ async function toggleSourceStatus(sourceId) {
         showModal('Update Error', `<p class="text-red-600">Error updating source: ${error.message}</p>`);
     }
 }
+
+// Close activation modal when clicking outside
+document.getElementById('activationModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeActivationModal();
+    }
+});
+
+async function showSourceStats(sourceId) {
+    try {
+        showLoadingModal('Loading Stats', 'Fetching source statistics...');
+        
+        const response = await fetch(`/api/sources/${sourceId}/stats`);
+        const stats = await response.json();
+        
+        if (response.ok) {
+            let content = `<div class="space-y-3">`;
+            content += `<p><strong>Source:</strong> ${stats.source_name}</p>`;
+            content += `<p><strong>Status:</strong> <span class="${stats.active ? 'text-green-600' : 'text-red-600'}">${stats.active ? 'Active' : 'Inactive'}</span></p>`;
+            content += `<p><strong>Collection Method:</strong> ${stats.collection_method}</p>`;
+            content += `<p><strong>Total Articles:</strong> ${stats.total_articles}</p>`;
+            content += `<p><strong>Average Hunt Score:</strong> <span class="${stats.avg_hunt_score >= 60 ? 'text-green-600' : stats.avg_hunt_score >= 40 ? 'text-yellow-600' : 'text-red-600'}">${stats.avg_hunt_score}/100</span></p>`;
+            content += `<p><strong>Average Content Length:</strong> ${stats.avg_content_length} characters</p>`;
+            content += `<p><strong>Average Quality Score:</strong> ${stats.avg_quality_score}/75</p>`;
+            content += `<p><strong>Last Check:</strong> ${stats.last_check ? new Date(stats.last_check).toLocaleString() : 'Never'}</p>`;
+            
+            if (Object.keys(stats.articles_by_date).length > 0) {
+                content += `<div class="mt-4"><strong>Recent Activity:</strong></div>`;
+                content += `<div class="max-h-32 overflow-y-auto">`;
+                const sortedDates = Object.keys(stats.articles_by_date).sort().reverse().slice(0, 10);
+                for (const date of sortedDates) {
+                    content += `<p class="text-xs">${date}: ${stats.articles_by_date[date]} articles</p>`;
+                }
+                content += `</div>`;
+            }
+            content += `</div>`;
+            
+            showModal('Source Statistics', content);
+        } else {
+            showModal('Stats Error', `<p class="text-red-600">Failed to load stats: ${stats.detail || 'Unknown error'}</p>`);
+        }
+    } catch (error) {
+        showModal('Stats Error', `<p class="text-red-600">Error loading stats: ${error.message}</p>`);
+    }
+}
+
 
 function showModal(title, content) {
     document.getElementById('modalTitle').textContent = title;

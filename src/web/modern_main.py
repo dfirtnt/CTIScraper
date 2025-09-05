@@ -128,6 +128,46 @@ Format as a clear, structured summary suitable for threat intelligence analysis.
 # Templates
 templates = Jinja2Templates(directory="src/web/templates")
 
+# Custom Jinja2 filter for highlighting keywords
+def highlight_keywords(text: str, perfect_matches: list, good_matches: list) -> str:
+    """Highlight perfect and good keyword matches in text."""
+    import re
+    
+    if not text:
+        return text
+    
+    # Escape special regex characters in keywords
+    def escape_regex(keyword):
+        return re.escape(keyword)
+    
+    # Create highlighting spans
+    highlighted_text = text
+    
+    # Highlight perfect keywords with purple background
+    for keyword in perfect_matches:
+        if keyword:
+            escaped_keyword = escape_regex(keyword)
+            pattern = re.compile(escaped_keyword, re.IGNORECASE)
+            highlighted_text = pattern.sub(
+                f'<span class="bg-purple-200 dark:bg-purple-800 text-purple-900 dark:text-purple-100 px-1 rounded font-semibold">{keyword}</span>',
+                highlighted_text
+            )
+    
+    # Highlight good keywords with green background
+    for keyword in good_matches:
+        if keyword:
+            escaped_keyword = escape_regex(keyword)
+            pattern = re.compile(escaped_keyword, re.IGNORECASE)
+            highlighted_text = pattern.sub(
+                f'<span class="bg-green-200 dark:bg-green-800 text-green-900 dark:text-green-100 px-1 rounded font-semibold">{keyword}</span>',
+                highlighted_text
+            )
+    
+    return highlighted_text
+
+# Register the custom filter
+templates.env.filters["highlight_keywords"] = highlight_keywords
+
 # Application lifespan
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -268,11 +308,19 @@ async def sources_list(request: Request):
         # Create a lookup for quality stats by source ID
         quality_lookup = {stat["source_id"]: stat for stat in quality_stats}
         
+        # Sort sources by acceptance rate (chosen percentage) with 100% at the top
+        def get_acceptance_rate(source):
+            if source.id in quality_lookup:
+                return quality_lookup[source.id]['acceptance_rate']
+            return 0  # Sources without stats go to bottom
+        
+        sources_sorted = sorted(sources, key=get_acceptance_rate, reverse=True)
+        
         return templates.TemplateResponse(
             "sources.html",
             {
                 "request": request, 
-                "sources": sources,
+                "sources": sources_sorted,
                 "quality_stats": quality_lookup
             }
         )
@@ -309,10 +357,18 @@ async def api_get_source(source_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/sources/{source_id}/toggle")
-async def api_toggle_source_status(source_id: int):
-    """Toggle source active status."""
+async def api_toggle_source_status(source_id: int, request: Request):
+    """Toggle source active status with optional collection period."""
     try:
-        result = await async_db_manager.toggle_source_status(source_id)
+        collection_days = None
+        try:
+            request_data = await request.json()
+            collection_days = request_data.get('collection_days')
+        except:
+            # If no JSON body, collection_days remains None
+            pass
+        
+        result = await async_db_manager.toggle_source_status(source_id, collection_days=collection_days)
         if not result:
             raise HTTPException(status_code=404, detail="Source not found")
         return result
@@ -339,6 +395,14 @@ async def api_source_stats(source_id: int):
         total_articles = len(articles)
         avg_content_length = sum(len(article.content or "") for article in articles) // max(total_articles, 1)
         
+        # Calculate average hunt score from article metadata
+        hunt_scores = []
+        for article in articles:
+            if article.metadata and 'hunt_score' in article.metadata:
+                hunt_scores.append(article.metadata['hunt_score'])
+        
+        avg_hunt_score = sum(hunt_scores) / len(hunt_scores) if hunt_scores else 0
+        
         # Mock quality score for now (in production, this would be calculated from actual quality data)
         avg_quality_score = 65  # Mock value
         
@@ -353,6 +417,7 @@ async def api_source_stats(source_id: int):
             "collection_method": "RSS" if source.rss_url else "Web Scraping",
             "total_articles": total_articles,
             "avg_content_length": avg_content_length,
+            "avg_hunt_score": round(avg_hunt_score, 1),
             "avg_quality_score": avg_quality_score,
             "last_check": source.last_check.isoformat() if source.last_check else None,
             "articles_by_date": articles_by_date

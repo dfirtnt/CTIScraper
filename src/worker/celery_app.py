@@ -105,6 +105,18 @@ def check_all_sources(self):
                         success = False
                         
                         try:
+                            # Get custom collection period from source config
+                            collection_days = 90  # Default
+                            if hasattr(source, 'config') and source.config and hasattr(source.config, 'collection_days'):
+                                collection_days = source.config.collection_days or 90
+                            
+                            # Create processor with source-specific collection period
+                            source_processor = ContentProcessor(
+                                similarity_threshold=0.85,
+                                max_age_days=collection_days,
+                                enable_content_enhancement=True
+                            )
+                            
                             # Parse RSS feed for new articles
                             articles = await rss_parser.parse_feed(source)
                             
@@ -113,7 +125,7 @@ def check_all_sources(self):
                                 logger.info(f"  ✓ {source.name}: {len(articles)} articles collected")
                                 
                                 # Process articles through deduplication
-                                dedup_result = await processor.process_articles(articles, existing_hashes)
+                                dedup_result = await source_processor.process_articles(articles, existing_hashes)
                                 
                                 # Save deduplicated articles
                                 if dedup_result.unique_articles:
@@ -275,10 +287,17 @@ def collect_from_source(self, source_id: int):
                 
                 logger.info(f"Collecting content from {source.name} (ID: {source_id})...")
                 
-                # Initialize processor for deduplication
+                # Get custom collection period from source config
+                collection_days = 90  # Default
+                if hasattr(source, 'config') and source.config and hasattr(source.config, 'collection_days'):
+                    collection_days = source.config.collection_days or 90
+                
+                logger.info(f"Using {collection_days}-day collection period for {source.name}")
+                
+                # Initialize processor for deduplication with source-specific period
                 processor = ContentProcessor(
                     similarity_threshold=0.85,
-                    max_age_days=90,
+                    max_age_days=collection_days,
                     enable_content_enhancement=True
                 )
                 

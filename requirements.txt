@@ -10,15 +10,15 @@ readability-lxml==0.3.0
 iocextract==1.16.1
 
 # Data processing and storage
-pandas==2.2.3
-numpy==1.24.3
+pandas==2.3.2
+numpy==1.26.4
 sqlalchemy[asyncio]==2.0.43
 asyncpg==0.29.0
 psycopg2-binary==2.9.9
 alembic==1.16.5
 
 # Web framework and server
-fastapi==0.115.6
+fastapi==0.116.1
 uvicorn[standard]==0.32.1
 jinja2==3.1.6
 
@@ -27,12 +27,12 @@ celery==5.4.0
 redis==5.2.1
 
 # Classification and ML
-scikit-learn==1.5.2
+scikit-learn==1.7.1
 sentence-transformers==3.1.0
 lightgbm==4.6.0
 joblib==1.4.2
-transformers==4.46.3
-torch==2.5.1
+transformers==4.56.1
+torch==2.8.0
 
 # Utilities
 click==8.2.1

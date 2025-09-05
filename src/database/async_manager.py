@@ -268,8 +268,8 @@ class AsyncDatabaseManager:
             logger.error(f"Failed to update source {source_id}: {e}")
             raise
     
-    async def toggle_source_status(self, source_id: int) -> Optional[Dict[str, Any]]:
-        """Toggle source active status with proper transaction handling."""
+    async def toggle_source_status(self, source_id: int, collection_days: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """Toggle source active status with proper transaction handling and optional collection period."""
         try:
             async with self.get_session() as session:
                 # Get the source
@@ -287,19 +287,35 @@ class AsyncDatabaseManager:
                 db_source.active = new_status
                 db_source.updated_at = datetime.now()
                 
+                # Update collection period if provided and activating
+                if collection_days is not None and new_status:
+                    # Store collection_days in the config JSON field
+                    config = dict(db_source.config) if db_source.config else {}
+                    config['collection_days'] = collection_days
+                    db_source.config = config
+                    logger.info(f"Set collection period to {collection_days} days for source {source_id}")
+                
                 # Commit the transaction
                 await session.commit()
                 await session.refresh(db_source)
                 
                 logger.info(f"Successfully toggled source {source_id} from {old_status} to {new_status}")
                 
-                return {
+                result_data = {
                     "source_id": source_id,
                     "source_name": db_source.name,
                     "old_status": old_status,
                     "new_status": new_status,
-                    "success": True
+                    "success": True,
+                    "message": f"Source {'activated' if new_status else 'deactivated'} successfully"
                 }
+                
+                # Include collection_days in response if it was set
+                if collection_days is not None and new_status:
+                    result_data["collection_days"] = collection_days
+                    result_data["message"] += f" with {collection_days}-day collection period"
+                
+                return result_data
                 
         except Exception as e:
             logger.error(f"Failed to toggle source {source_id}: {e}")
@@ -587,6 +603,9 @@ class AsyncDatabaseManager:
         """Convert database source to Pydantic model."""
         from src.models.source import SourceConfig
         
+        # Ensure config has all required fields with defaults
+        config_dict = dict(db_source.config) if db_source.config else {}
+        
         return Source(
             id=db_source.id,
             identifier=db_source.identifier,
@@ -595,7 +614,7 @@ class AsyncDatabaseManager:
             rss_url=db_source.rss_url,
             check_frequency=db_source.check_frequency,
             active=db_source.active,
-            config=SourceConfig.parse_obj(db_source.config),
+            config=SourceConfig.parse_obj(config_dict),
             last_check=db_source.last_check,
             last_success=db_source.last_success,
             consecutive_failures=db_source.consecutive_failures,

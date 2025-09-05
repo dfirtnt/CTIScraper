@@ -282,11 +282,69 @@
                                 {% endif %}
                             </span>
                             {% endif %}
+                            
+                            {% if article.metadata and article.metadata.get('perfect_keyword_matches') %}
+                            <span>Perfect Keywords: 
+                                {% set perfect_matches = article.metadata.get('perfect_keyword_matches', []) %}
+                                {% if perfect_matches %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                                        ⭐ {{ perfect_matches|length }} matches
+                                    </span>
+                                {% endif %}
+                            </span>
+                            {% endif %}
+                            
+                            {% if article.metadata and article.metadata.get('good_keyword_matches') %}
+                            <span>Good Keywords: 
+                                {% set good_matches = article.metadata.get('good_keyword_matches', []) %}
+                                {% if good_matches %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                        ✅ {{ good_matches|length }} matches
+                                    </span>
+                                {% endif %}
+                            </span>
+                            {% endif %}
                         </div>
 
                         <p class="text-gray-600 dark:text-gray-300 mb-3">
                             {{ article.content[:300] }}{% if article.content|length > 300 %}...{% endif %}
                         </p>
+
+                        {% if article.metadata and article.metadata.get('perfect_keyword_matches') %}
+                        {% set perfect_matches = article.metadata.get('perfect_keyword_matches', []) %}
+                        {% if perfect_matches %}
+                        <div class="mb-3">
+                            <div class="text-sm text-purple-600 dark:text-purple-400 mb-2">
+                                ⭐ Perfect Keywords ({{ perfect_matches|length }})
+                            </div>
+                            <div class="flex flex-wrap gap-1">
+                                {% for keyword in perfect_matches %}
+                                <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                                    {{ keyword }}
+                                </span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endif %}
+
+                        {% if article.metadata and article.metadata.get('good_keyword_matches') %}
+                        {% set good_matches = article.metadata.get('good_keyword_matches', []) %}
+                        {% if good_matches %}
+                        <div class="mb-3">
+                            <div class="text-sm text-green-600 dark:text-green-400 mb-2">
+                                ✅ Good Keywords ({{ good_matches|length }})
+                            </div>
+                            <div class="flex flex-wrap gap-1">
+                                {% for keyword in good_matches %}
+                                <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                    {{ keyword }}
+                                </span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endif %}
 
                         <div class="flex items-center space-x-2">
                             <button onclick="openClassificationModal({{ article.id }}, '{{ article.title|replace("'", "\\'")|replace('"', '\\"') }}')" 
