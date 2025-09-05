@@ -1979,28 +1979,15 @@
     }
     
     function addHighlightToPage(highlight) {
-        const articleContent = document.getElementById('articleContent');
-        if (!articleContent) return;
+        // Add highlight to the array first
+        articleHighlights.push(highlight);
         
-        // Create highlight element
-        const highlightElement = document.createElement('span');
-        highlightElement.className = `text-highlight ${highlight.is_huntable ? 'huntable' : 'not-huntable'}`;
-        highlightElement.dataset.highlightId = highlight.id;
-        highlightElement.dataset.startOffset = highlight.start_offset;
-        highlightElement.dataset.endOffset = highlight.end_offset;
-        highlightElement.title = `Categorized as ${highlight.is_huntable ? 'huntable' : 'not huntable'} on ${new Date(highlight.categorized_at).toLocaleString()}`;
-        
-        // Add click handler for highlight management
-        highlightElement.addEventListener('click', function(e) {
-            e.stopPropagation();
-            showHighlightContextMenu(e, highlight);
-        });
-        
-        // Insert highlight into the text
-        insertHighlightIntoText(articleContent, highlight);
+        // Then rebuild all highlights to ensure proper display
+        rebuildAllHighlights();
     }
     
     function insertHighlightIntoText(container, highlight) {
+        // Get the plain text content (without any existing highlights)
         const textContent = container.textContent;
         const beforeText = textContent.substring(0, highlight.start_offset);
         const selectedText = textContent.substring(highlight.start_offset, highlight.end_offset);
@@ -2021,8 +2008,83 @@
             showHighlightContextMenu(e, highlight);
         });
         
-        // Replace the text content with highlighted version
-        container.innerHTML = beforeText + highlightElement.outerHTML + afterText;
+        // Check if this highlight overlaps with existing ones
+        const existingHighlights = container.querySelectorAll('.text-highlight');
+        let hasOverlap = false;
+        
+        existingHighlights.forEach(existingHighlight => {
+            const existingStart = parseInt(existingHighlight.dataset.startOffset);
+            const existingEnd = parseInt(existingHighlight.dataset.endOffset);
+            
+            // Check for overlap
+            if ((highlight.start_offset < existingEnd && highlight.end_offset > existingStart)) {
+                hasOverlap = true;
+                console.log('⚠️ Highlight overlap detected:', {
+                    new: {start: highlight.start_offset, end: highlight.end_offset},
+                    existing: {start: existingStart, end: existingEnd}
+                });
+            }
+        });
+        
+        if (hasOverlap) {
+            console.log('🔄 Rebuilding all highlights to handle overlap');
+            rebuildAllHighlights();
+        } else {
+            // Safe to insert without affecting existing highlights
+            container.innerHTML = beforeText + highlightElement.outerHTML + afterText;
+        }
+    }
+    
+    function rebuildAllHighlights() {
+        const articleContent = document.getElementById('articleContent');
+        if (!articleContent) return;
+        
+        // Get the original plain text
+        const originalText = articleContent.textContent;
+        
+        // Sort highlights by start offset
+        const sortedHighlights = [...articleHighlights].sort((a, b) => a.start_offset - b.start_offset);
+        
+        // Build the HTML with all highlights
+        let html = '';
+        let lastOffset = 0;
+        
+        sortedHighlights.forEach(highlight => {
+            // Add text before this highlight
+            if (highlight.start_offset > lastOffset) {
+                html += originalText.substring(lastOffset, highlight.start_offset);
+            }
+            
+            // Add the highlight
+            const highlightElement = document.createElement('span');
+            highlightElement.className = `text-highlight ${highlight.is_huntable ? 'huntable' : 'not-huntable'}`;
+            highlightElement.dataset.highlightId = highlight.id;
+            highlightElement.dataset.startOffset = highlight.start_offset;
+            highlightElement.dataset.endOffset = highlight.end_offset;
+            highlightElement.textContent = highlight.selected_text;
+            highlightElement.title = `Categorized as ${highlight.is_huntable ? 'huntable' : 'not huntable'} on ${new Date(highlight.categorized_at).toLocaleString()}`;
+            
+            // Add click handler
+            highlightElement.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const highlightData = articleHighlights.find(h => h.id == highlight.id);
+                if (highlightData) {
+                    showHighlightContextMenu(e, highlightData);
+                }
+            });
+            
+            html += highlightElement.outerHTML;
+            lastOffset = highlight.end_offset;
+        });
+        
+        // Add remaining text
+        if (lastOffset < originalText.length) {
+            html += originalText.substring(lastOffset);
+        }
+        
+        // Update the container
+        articleContent.innerHTML = html;
+        console.log('✅ All highlights rebuilt successfully');
     }
     
     async function loadExistingHighlights() {
@@ -2031,12 +2093,12 @@
             const localHighlights = loadHighlightsFromStorage();
             articleHighlights = localHighlights;
             
-            // Add local highlights to the page immediately
-            localHighlights.forEach(highlight => {
-                addHighlightToPage(highlight);
-            });
-            
             console.log('🎯 Local highlights loaded:', localHighlights.length);
+            
+            // Rebuild all highlights to ensure proper display
+            if (localHighlights.length > 0) {
+                rebuildAllHighlights();
+            }
             
             // Then sync with server
             const response = await fetch(`/api/articles/{{ article.id }}/highlights`);
@@ -2053,13 +2115,17 @@
                     );
                     if (!exists) {
                         mergedHighlights.push(serverHighlight);
-                        addHighlightToPage(serverHighlight);
                     }
                 });
                 
                 articleHighlights = mergedHighlights;
                 console.log('🎯 Server highlights synced:', serverHighlights.length);
                 console.log('🎯 Total highlights:', articleHighlights.length);
+                
+                // Rebuild all highlights with merged data
+                if (articleHighlights.length > 0) {
+                    rebuildAllHighlights();
+                }
             }
         } catch (error) {
             console.error('Error loading highlights:', error);
@@ -2233,14 +2299,22 @@
     }
     
     function updateHighlightOnPage(highlight) {
-        const highlightElement = document.querySelector(`[data-highlight-id="${highlight.id}"]`);
-        if (highlightElement) {
-            // Update classes
-            highlightElement.className = `text-highlight ${highlight.is_huntable ? 'huntable' : 'not-huntable'}`;
-            
-            // Update title
-            highlightElement.title = `Categorized as ${highlight.is_huntable ? 'huntable' : 'not huntable'} on ${new Date(highlight.categorized_at).toLocaleString()}`;
+        // Update the highlight in the array
+        const index = articleHighlights.findIndex(h => h.id === highlight.id);
+        if (index !== -1) {
+            articleHighlights[index] = highlight;
         }
+        
+        // Rebuild all highlights to reflect the change
+        rebuildAllHighlights();
+    }
+    
+    function removeHighlightFromPage(highlightId) {
+        // Remove highlight from the array
+        articleHighlights = articleHighlights.filter(h => h.id !== highlightId);
+        
+        // Rebuild all highlights to reflect the removal
+        rebuildAllHighlights();
     }
     
     // Display highlighting logs
