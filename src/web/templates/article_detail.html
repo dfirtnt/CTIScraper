@@ -357,8 +357,8 @@
                 // Update the current status display
                 updateClassificationStatus(category);
                 
-                // Auto-advance to next unclassified only if marked as rejected
-                if (category === 'rejected') {
+                // Auto-advance to next unclassified if marked as rejected or chosen
+                if (category === 'rejected' || category === 'chosen') {
                     setTimeout(() => {
                         navigateToNextUnclassified();
                     }, 1000);
@@ -414,16 +414,27 @@
     
     // Navigation functions
     async function navigateToNextUnclassified() {
+        console.log('navigateToNextUnclassified called'); // Debug log
         try {
             const response = await fetch('/api/articles/next-unclassified');
+            console.log('API response status:', response.status); // Debug log
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
             const data = await response.json();
+            console.log('API response data:', data); // Debug log
             
             if (data.article_id) {
+                console.log('Navigating to article:', data.article_id); // Debug log
                 window.location.href = `/articles/${data.article_id}`;
             } else {
+                console.log('No article_id in response'); // Debug log
                 showNotification('No more unclassified articles found!', 'info');
             }
         } catch (error) {
+            console.error('Error in navigateToNextUnclassified:', error); // Debug log
             showNotification(`Error: ${error.message}`, 'error');
         }
     }
@@ -604,7 +615,8 @@
             const requestBody = {
                 include_content: true,
                 api_key: apiKey,
-                force_regenerate: forceRegenerate
+                force_regenerate: forceRegenerate,
+                ai_model: aiModel
             };
             
             // Add author name for SIGMA rules

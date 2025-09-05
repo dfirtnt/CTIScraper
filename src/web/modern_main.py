@@ -25,6 +25,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 
 # Add src to path for imports
 src_path = Path(__file__).parent.parent.parent
@@ -116,7 +117,7 @@ async def get_db_session() -> AsyncSession:
         yield session
 
 # Health check endpoint
-@app.get("/health")
+@app.get("/api/health")
 async def health_check():
     """Health check endpoint for monitoring."""
     try:
@@ -414,6 +415,7 @@ async def articles_list(
     source: Optional[str] = None,
     classification: Optional[str] = None,
     threat_hunting_range: Optional[str] = None,
+    sort_by: Optional[str] = "date_published",
     per_page: Optional[int] = 100,
     page: Optional[int] = 1
 ):
@@ -493,6 +495,27 @@ async def articles_list(
                 # If parsing fails, ignore the filter
                 pass
         
+        # Apply sorting
+        if sort_by == "date_published":
+            filtered_articles.sort(key=lambda x: x.published_at or datetime.min, reverse=True)
+        elif sort_by == "hunt_score":
+            filtered_articles.sort(key=lambda x: (x.metadata.get('threat_hunting_score', 0) if x.metadata else 0, x.id), reverse=True)
+        elif sort_by == "content_characters":
+            filtered_articles.sort(key=lambda x: len(x.content), reverse=True)
+        elif sort_by == "source":
+            filtered_articles.sort(key=lambda x: source_lookup.get(x.source_id, {}).get('name', '') if x.source_id in source_lookup else '')
+        elif sort_by == "title":
+            filtered_articles.sort(key=lambda x: x.title.lower())
+        elif sort_by == "classification":
+            def get_classification_key(article):
+                if not article.metadata:
+                    return "unclassified"
+                category = article.metadata.get('training_category')
+                if category in ['chosen', 'rejected']:
+                    return category
+                return "unclassified"
+            filtered_articles.sort(key=get_classification_key)
+        
         # Apply pagination
         total_articles = len(filtered_articles)
         per_page = max(1, min(per_page, 100))  # Limit to 100 per page
@@ -519,7 +542,8 @@ async def articles_list(
             "search": search or "",
             "source": source or "",
             "classification": classification or "",
-            "threat_hunting_range": threat_hunting_range or ""
+            "threat_hunting_range": threat_hunting_range or "",
+            "sort_by": sort_by or "date_published"
         }
         
         # Get classification statistics from filtered articles
@@ -604,21 +628,30 @@ async def api_articles_list(limit: Optional[int] = 100):
 
 @app.get("/api/articles/next-unclassified")
 async def api_get_next_unclassified():
-    """API endpoint for getting the next unclassified article."""
+    """API endpoint for getting the next unclassified article with highest threat hunt score."""
     try:
-        # Get all articles ordered by ID to ensure consistent ordering
+        # Get all articles
         articles = await async_db_manager.list_articles()
         
-        # Sort by ID to ensure we get the lowest unclassified article ID
-        articles.sort(key=lambda x: x.id)
+        # Filter to only unclassified articles
+        unclassified_articles = [
+            article for article in articles
+            if not article.metadata or article.metadata.get('training_category') not in ['chosen', 'rejected']
+        ]
         
-        # Find the first unclassified article
-        for article in articles:
-            if not article.metadata or article.metadata.get('training_category') not in ['chosen', 'rejected']:
-                return {"article_id": article.id}
+        if not unclassified_articles:
+            return {"article_id": None, "message": "No unclassified articles found"}
         
-        # If no unclassified articles found
-        return {"article_id": None, "message": "No unclassified articles found"}
+        # Sort by threat hunt score (highest first), then by ID as tiebreaker
+        unclassified_articles.sort(
+            key=lambda x: (
+                -(x.metadata.get('threat_hunting_score', 0) if x.metadata else 0),  # Negative for descending order
+                x.id  # ID as tiebreaker for consistent ordering
+            )
+        )
+        
+        # Return the article with the highest threat hunt score
+        return {"article_id": unclassified_articles[0].id}
         
     except Exception as e:
         logger.error(f"API get next unclassified error: {e}")
@@ -1459,54 +1492,88 @@ Based on the article title and metadata, provide:
 
 Please provide a brief but insightful analysis based on the available metadata."""
         
-        # Use ChatGPT API (no fallback to Ollama for SIGMA generation)
-        chatgpt_api_url = os.getenv('CHATGPT_API_URL', 'https://api.openai.com/v1/chat/completions')
-        
-        logger.info(f"Sending SIGMA request to OpenAI for article {article_id}, content length: {len(content) if include_content else 'metadata only'}")
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                chatgpt_api_url,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": "gpt-4",
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "You are a senior cybersecurity detection engineer specializing in SIGMA rule creation and threat hunting. Generate high-quality, actionable SIGMA rules based on threat intelligence articles. Always use proper SIGMA syntax and include all required fields according to SigmaHQ standards. Focus on TTPs (Tactics, Techniques, and Procedures) rather than atomic IOCs (Indicators of Compromise). Create rules that detect behavioral patterns and techniques, not just specific artifacts like IP addresses or file hashes. Domain/URL patterns are acceptable when they represent techniques or behavioral patterns.\n\nCRITICAL: Use ONLY valid SIGMA condition syntax. NEVER use SQL-like syntax (count(), group by, where, stats, etc.) or aggregation functions in conditions. Valid conditions are: 'selection', 'selection1 and selection2', 'selection1 or selection2', 'all of selection*', '1 of selection*'. Always reference defined selections above the condition."
-                        },
-                        {
-                            "role": "user",
-                            "content": prompt
+        # Use the selected model
+        if ai_model == 'chatgpt':
+            # Use ChatGPT API
+            chatgpt_api_url = os.getenv('CHATGPT_API_URL', 'https://api.openai.com/v1/chat/completions')
+            
+            logger.info(f"Sending SIGMA request to OpenAI for article {article_id}, content length: {len(content) if include_content else 'metadata only'}")
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    chatgpt_api_url,
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "gpt-4",
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "You are a senior cybersecurity detection engineer specializing in SIGMA rule creation and threat hunting. Generate high-quality, actionable SIGMA rules based on threat intelligence articles. Always use proper SIGMA syntax and include all required fields according to SigmaHQ standards. Focus on TTPs (Tactics, Techniques, and Procedures) rather than atomic IOCs (Indicators of Compromise). Create rules that detect behavioral patterns and techniques, not just specific artifacts like IP addresses or file hashes. Domain/URL patterns are acceptable when they represent techniques or behavioral patterns.\n\nCRITICAL: Use ONLY valid SIGMA condition syntax. NEVER use SQL-like syntax (count(), group by, where, stats, etc.) or aggregation functions in conditions. Valid conditions are: 'selection', 'selection1 and selection2', 'selection1 or selection2', 'all of selection*', '1 of selection*'. Always reference defined selections above the condition."
+                            },
+                            {
+                                "role": "user",
+                                "content": prompt
+                            }
+                        ],
+                        "max_tokens": 2048,  # Reduced from 4096 to stay within limits
+                        "temperature": 0.2   # Lower temperature for more consistent rule generation
+                    },
+                    timeout=120.0  # Longer timeout for SIGMA generation
+                )
+                
+                if response.status_code != 200:
+                    error_detail = f"Failed to generate SIGMA rules: {response.status_code}"
+                    if response.status_code == 401:
+                        error_detail = "Invalid API key. Please check your OpenAI API key in Settings."
+                    elif response.status_code == 429:
+                        error_detail = "Rate limit exceeded. Please try again later."
+                    elif response.status_code == 400:
+                        # Log the actual error from OpenAI
+                        try:
+                            error_response = response.json()
+                            logger.error(f"OpenAI API 400 error details: {error_response}")
+                            error_detail = f"OpenAI API error: {error_response.get('error', {}).get('message', 'Bad request')}"
+                        except:
+                            error_detail = "OpenAI API error: Bad request - check prompt format"
+                    raise HTTPException(status_code=500, detail=error_detail)
+                
+                result = response.json()
+                sigma_rules = result['choices'][0]['message']['content']
+                model_name = "gpt-4"
+                model_used = "chatgpt"
+        else:
+            # Use Ollama API
+            ollama_url = os.getenv('LLM_API_URL', 'http://cti_ollama:11434')
+            ollama_model = get_ollama_model(ai_model)
+            
+            logger.info(f"Sending SIGMA request to Ollama at {ollama_url} with model {ollama_model} for article {article_id}")
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{ollama_url}/api/generate",
+                    json={
+                        "model": ollama_model,
+                        "prompt": f"You are a senior cybersecurity detection engineer specializing in SIGMA rule creation and threat hunting. Generate high-quality, actionable SIGMA rules based on threat intelligence articles. Always use proper SIGMA syntax and include all required fields according to SigmaHQ standards. Focus on TTPs (Tactics, Techniques, and Procedures) rather than atomic IOCs (Indicators of Compromise). Create rules that detect behavioral patterns and techniques, not just specific artifacts like IP addresses or file hashes. Domain/URL patterns are acceptable when they represent techniques or behavioral patterns.\n\nCRITICAL: Use ONLY valid SIGMA condition syntax. NEVER use SQL-like syntax (count(), group by, where, stats, etc.) or aggregation functions in conditions. Valid conditions are: 'selection', 'selection1 and selection2', 'selection1 or selection2', 'all of selection*', '1 of selection*'. Always reference defined selections above the condition.\n\n{prompt}",
+                        "stream": False,
+                        "options": {
+                            "temperature": 0.2,
+                            "num_predict": 2048
                         }
-                    ],
-                    "max_tokens": 2048,  # Reduced from 4096 to stay within limits
-                    "temperature": 0.2   # Lower temperature for more consistent rule generation
-                },
-                timeout=120.0  # Longer timeout for SIGMA generation
-            )
-            
-            if response.status_code != 200:
-                error_detail = f"Failed to generate SIGMA rules: {response.status_code}"
-                if response.status_code == 401:
-                    error_detail = "Invalid API key. Please check your OpenAI API key in Settings."
-                elif response.status_code == 429:
-                    error_detail = "Rate limit exceeded. Please try again later."
-                elif response.status_code == 400:
-                    # Log the actual error from OpenAI
-                    try:
-                        error_response = response.json()
-                        logger.error(f"OpenAI API 400 error details: {error_response}")
-                        error_detail = f"OpenAI API error: {error_response.get('error', {}).get('message', 'Bad request')}"
-                    except:
-                        error_detail = "OpenAI API error: Bad request - check prompt format"
-                raise HTTPException(status_code=500, detail=error_detail)
-            
-            result = response.json()
-            sigma_rules = result['choices'][0]['message']['content']
+                    },
+                    timeout=180.0  # Longer timeout for SIGMA generation
+                )
+                
+                if response.status_code != 200:
+                    error_detail = f"Failed to generate SIGMA rules from Ollama: {response.status_code}"
+                    raise HTTPException(status_code=500, detail=error_detail)
+                
+                result = response.json()
+                sigma_rules = result.get('response', '')
+                model_name = ollama_model
+                model_used = "ollama"
         
         # Store the SIGMA rules and behavior extraction in article metadata
         current_metadata = article.metadata.copy() if article.metadata else {}
@@ -1514,8 +1581,8 @@ Please provide a brief but insightful analysis based on the available metadata."
             'rules': sigma_rules,
             'generated_at': datetime.now().isoformat(),
             'content_type': 'full content' if include_content else 'metadata only',
-            'model_used': 'chatgpt',
-            'model_name': 'gpt-4'
+            'model_used': model_used,
+            'model_name': model_name
         }
         
         # Store behavior extraction results
@@ -1575,8 +1642,9 @@ async def api_extract_iocs(article_id: int, request: Request):
         api_key = body.get('api_key')  # Get API key from request
         force_regenerate = body.get('force_regenerate', False)  # Force regeneration
         use_llm_validation = body.get('use_llm_validation', True)  # Use LLM validation
+        ai_model = body.get('ai_model', 'ollama')  # Get AI model from request, default to ollama
         
-        logger.info(f"IOC extraction request for article {article_id}, api_key provided: {bool(api_key)}, force_regenerate: {force_regenerate}, use_llm_validation: {use_llm_validation}")
+        logger.info(f"IOC extraction request for article {article_id}, api_key provided: {bool(api_key)}, force_regenerate: {force_regenerate}, use_llm_validation: {use_llm_validation}, ai_model: {ai_model}")
         
         # If force regeneration is requested, skip cache check
         if not force_regenerate:
@@ -1608,7 +1676,7 @@ async def api_extract_iocs(article_id: int, request: Request):
             content = f"Title: {article.title}\nURL: {article.canonical_url or 'N/A'}\nPublished: {article.published_at or 'N/A'}\nSource: {article.source_id}"
         
         # Extract IOCs using hybrid approach
-        extraction_result = await ioc_extractor.extract_iocs(content, api_key)
+        extraction_result = await ioc_extractor.extract_iocs(content, api_key, ai_model)
         
         # Store the IOCs in article metadata
         current_metadata = article.metadata.copy() if article.metadata else {}
@@ -1617,7 +1685,7 @@ async def api_extract_iocs(article_id: int, request: Request):
             'extracted_at': datetime.now().isoformat(),
             'content_type': 'full content' if include_content else 'metadata only',
             'model_used': 'hybrid' if extraction_result.extraction_method == 'hybrid' else 'regex',
-            'model_name': 'gpt-4' if extraction_result.extraction_method == 'hybrid' else 'custom-regex',
+            'model_name': 'gpt-4' if extraction_result.extraction_method == 'hybrid' and ai_model == 'chatgpt' else ('ollama' if extraction_result.extraction_method == 'hybrid' else 'custom-regex'),
             'extraction_method': extraction_result.extraction_method,
             'confidence': extraction_result.confidence,
             'processing_time': extraction_result.processing_time,
@@ -1650,6 +1718,437 @@ async def api_extract_iocs(article_id: int, request: Request):
     except Exception as e:
         logger.error(f"IOC extraction error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# Health Check Endpoints
+@app.get("/api/health")
+async def api_health_check():
+    """Basic health check endpoint."""
+    try:
+        # Test database connection
+        async with async_db_manager.get_session() as session:
+            await session.execute(text("SELECT 1"))
+        
+        return {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "version": "1.0.0",
+            "services": {
+                "database": "healthy",
+                "web": "healthy"
+            }
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return {
+            "status": "unhealthy",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e),
+            "services": {
+                "database": "unhealthy",
+                "web": "healthy"
+            }
+        }
+
+@app.get("/api/health/database")
+async def api_database_health():
+    """Comprehensive database health check."""
+    try:
+        # Test database connection
+        async with async_db_manager.get_session() as session:
+            # Get basic statistics
+            articles_count = await session.execute(text("SELECT COUNT(*) FROM articles"))
+            total_articles = articles_count.scalar()
+            
+            sources_count = await session.execute(text("SELECT COUNT(*) FROM sources"))
+            total_sources = sources_count.scalar()
+            
+            # Test deduplication system
+            duplicate_check = await session.execute(
+                text("SELECT COUNT(*) as total, COUNT(DISTINCT canonical_url) as unique_urls, COUNT(DISTINCT content_hash) as unique_hashes FROM articles")
+            )
+            dedup_stats = duplicate_check.fetchone()
+            
+            # Test SimHash system
+            simhash_check = await session.execute(
+                text("SELECT COUNT(*) as articles_with_simhash FROM articles WHERE simhash IS NOT NULL")
+            )
+            simhash_stats = simhash_check.fetchone()
+            
+            # Test index performance
+            performance_check = await session.execute(text("SELECT test_index_performance()"))
+            performance_results = performance_check.fetchall()
+            
+            # Process performance results safely
+            performance_data = []
+            for result in performance_results:
+                if result and len(result) >= 4:
+                    performance_data.append({
+                        "test": str(result[0]),
+                        "query_time_ms": float(result[1]),
+                        "rows_returned": int(result[2]),
+                        "index_used": str(result[3])
+                    })
+        
+        return {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "database": {
+                "connection": "healthy",
+                "total_articles": int(total_articles),
+                "total_sources": int(total_sources),
+                "deduplication": {
+                    "total_articles": int(dedup_stats[0]),
+                    "unique_urls": int(dedup_stats[1]),
+                    "unique_content_hashes": int(dedup_stats[2]),
+                    "duplicate_rate": f"{((int(dedup_stats[0]) - int(dedup_stats[1])) / int(dedup_stats[0]) * 100):.2f}%" if int(dedup_stats[0]) > 0 else "0%"
+                },
+                "simhash": {
+                    "articles_with_simhash": int(simhash_stats[0]),
+                    "coverage": f"{(int(simhash_stats[0]) / int(dedup_stats[0]) * 100):.2f}%" if int(dedup_stats[0]) > 0 else "0%"
+                },
+                "performance": performance_data
+            }
+        }
+    except Exception as e:
+        logger.error(f"Database health check failed: {e}")
+        return {
+            "status": "unhealthy",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e),
+            "database": {
+                "connection": "unhealthy"
+            }
+        }
+
+@app.get("/api/health/deduplication")
+async def api_deduplication_health():
+    """Detailed deduplication system health check."""
+    try:
+        async with async_db_manager.get_session() as session:
+            # SimHash bucket analysis
+            bucket_analysis = await session.execute(text("""
+                SELECT bucket_id, COUNT(*) as articles_per_bucket 
+                FROM simhash_buckets 
+                GROUP BY bucket_id 
+                ORDER BY articles_per_bucket DESC
+            """))
+            bucket_stats = bucket_analysis.fetchall()
+            
+            # Find potential near-duplicates
+            near_duplicate_check = await session.execute(text("""
+                SELECT COUNT(*) as potential_near_duplicates
+                FROM (
+                    SELECT simhash, COUNT(*) as count
+                    FROM articles 
+                    WHERE simhash IS NOT NULL
+                    GROUP BY simhash
+                    HAVING COUNT(*) > 1
+                ) duplicates
+            """))
+            near_duplicate_stats = near_duplicate_check.fetchone()
+            
+            # Content hash analysis
+            content_hash_analysis = await session.execute(text("""
+                SELECT content_hash, COUNT(*) as count
+                FROM articles 
+                GROUP BY content_hash
+                HAVING COUNT(*) > 1
+                ORDER BY count DESC
+                LIMIT 5
+            """))
+            content_hash_duplicates = content_hash_analysis.fetchall()
+        
+        return {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "deduplication": {
+                "exact_duplicates": {
+                    "content_hash_duplicates": len(content_hash_duplicates),
+                    "duplicate_details": [
+                        {"hash": str(row[0])[:8] + "...", "count": int(row[1])}
+                        for row in content_hash_duplicates
+                    ]
+                },
+                "near_duplicates": {
+                    "potential_near_duplicates": int(near_duplicate_stats[0]),
+                    "simhash_coverage": "100%" if near_duplicate_stats[0] == 0 else "Needs review"
+                },
+                "simhash_buckets": {
+                    "total_buckets": len(bucket_stats),
+                    "bucket_distribution": [
+                        {"bucket_id": int(row[0]), "articles_count": int(row[1])}
+                        for row in bucket_stats[:10]  # Top 10 buckets
+                    ],
+                    "most_active_bucket": {"bucket_id": int(bucket_stats[0][0]), "articles_count": int(bucket_stats[0][1])} if bucket_stats else None
+                }
+            }
+        }
+    except Exception as e:
+        logger.error(f"Deduplication health check failed: {e}")
+        return {
+            "status": "unhealthy",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e)
+        }
+
+@app.get("/api/health/services")
+async def api_services_health():
+    """Check health of external services."""
+    try:
+        services_status = {}
+        
+        # Check Ollama service
+        try:
+            ollama_url = os.getenv('LLM_API_URL', 'http://cti_ollama:11434')
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"{ollama_url}/api/tags", timeout=5.0)
+                if response.status_code == 200:
+                    models = response.json().get('models', [])
+                    services_status['ollama'] = {
+                        "status": "healthy",
+                        "models_available": len(models),
+                        "models": [model['name'] for model in models[:5]]  # First 5 models
+                    }
+                else:
+                    services_status['ollama'] = {"status": "unhealthy", "error": f"HTTP {response.status_code}"}
+        except Exception as e:
+            services_status['ollama'] = {"status": "unhealthy", "error": str(e)}
+        
+        # Check Redis service
+        try:
+            import redis
+            redis_client = redis.Redis(host='cti_redis', port=6379, db=0, password='cti_redis_2024')
+            redis_client.ping()
+            services_status['redis'] = {
+                "status": "healthy",
+                "info": redis_client.info('memory')
+            }
+        except Exception as e:
+            services_status['redis'] = {"status": "unhealthy", "error": str(e)}
+        
+        return {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "services": services_status
+        }
+    except Exception as e:
+        logger.error(f"Services health check failed: {e}")
+        return {
+            "status": "unhealthy",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e)
+        }
+
+@app.get("/api/health/celery")
+async def api_celery_health():
+    """Check health of Celery workers and tasks."""
+    try:
+        from src.worker.celery_app import celery_app
+        
+        celery_status = {}
+        
+        # Check Celery workers
+        try:
+            inspect = celery_app.control.inspect()
+            active_workers = inspect.active()
+            registered_workers = inspect.registered()
+            stats = inspect.stats()
+            
+            if active_workers:
+                celery_status['workers'] = {
+                    "status": "healthy",
+                    "active_workers": len(active_workers),
+                    "worker_details": []
+                }
+                
+                for worker_name, tasks in active_workers.items():
+                    worker_stats = stats.get(worker_name, {})
+                    celery_status['workers']['worker_details'].append({
+                        "name": worker_name,
+                        "active_tasks": len(tasks),
+                        "total_tasks": worker_stats.get('total', {}).get('tasks.succeeded', 0) + worker_stats.get('total', {}).get('tasks.failed', 0),
+                        "pool": worker_stats.get('pool', {}).get('processes', 'N/A'),
+                        "rusage": worker_stats.get('rusage', {})
+                    })
+            else:
+                celery_status['workers'] = {
+                    "status": "unhealthy",
+                    "error": "No active workers found"
+                }
+        except Exception as e:
+            celery_status['workers'] = {
+                "status": "unhealthy",
+                "error": str(e)
+            }
+        
+        # Check Celery broker (Redis)
+        try:
+            broker_url = celery_app.conf.broker_url
+            celery_status['broker'] = {
+                "status": "healthy",
+                "url": broker_url.split('@')[1] if '@' in broker_url else broker_url  # Hide password
+            }
+        except Exception as e:
+            celery_status['broker'] = {
+                "status": "unhealthy",
+                "error": str(e)
+            }
+        
+        # Check Celery result backend
+        try:
+            result_backend = celery_app.conf.result_backend
+            celery_status['result_backend'] = {
+                "status": "healthy",
+                "backend": result_backend.split('@')[1] if '@' in result_backend else result_backend
+            }
+        except Exception as e:
+            celery_status['result_backend'] = {
+                "status": "unhealthy",
+                "error": str(e)
+            }
+        
+        # Check recent task activity
+        try:
+            # Get task statistics from the last hour
+            from datetime import datetime, timedelta
+            from celery import states
+            
+            # This is a simplified check - in production you might want to query task results
+            celery_status['recent_activity'] = {
+                "status": "healthy",
+                "note": "Task activity monitoring available via Celery monitoring tools"
+            }
+        except Exception as e:
+            celery_status['recent_activity'] = {
+                "status": "unhealthy",
+                "error": str(e)
+            }
+        
+        return {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "celery": celery_status
+        }
+    except Exception as e:
+        logger.error(f"Celery health check failed: {e}")
+        return {
+            "status": "unhealthy",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e)
+        }
+
+@app.get("/api/health/ingestion")
+async def api_ingestion_analytics():
+    """Get article ingestion analytics and trends."""
+    try:
+        async with async_db_manager.get_session() as session:
+            # Get ingestion data for the last 30 days
+            ingestion_query = await session.execute(text("""
+                SELECT 
+                    DATE(published_at) as date,
+                    COUNT(*) as articles_count,
+                    COUNT(DISTINCT source_id) as sources_count
+                FROM articles 
+                WHERE published_at >= CURRENT_DATE - INTERVAL '30 days'
+                GROUP BY DATE(published_at)
+                ORDER BY date DESC
+            """))
+            daily_data = ingestion_query.fetchall()
+            
+            # Get hourly distribution for today
+            hourly_query = await session.execute(text("""
+                SELECT 
+                    EXTRACT(HOUR FROM published_at) as hour,
+                    COUNT(*) as articles_count
+                FROM articles 
+                WHERE DATE(published_at) = CURRENT_DATE
+                GROUP BY EXTRACT(HOUR FROM published_at)
+                ORDER BY hour
+            """))
+            hourly_data = hourly_query.fetchall()
+            
+            # Get source breakdown for last 7 days
+            source_query = await session.execute(text("""
+                SELECT 
+                    s.name as source_name,
+                    COUNT(a.id) as articles_count,
+                    AVG(CAST(a.article_metadata->>'threat_hunting_score' AS FLOAT)) as avg_hunt_score,
+                    COUNT(CASE WHEN a.article_metadata->>'training_category' = 'chosen' THEN 1 END) as chosen_count,
+                    COUNT(CASE WHEN a.article_metadata->>'training_category' = 'rejected' THEN 1 END) as rejected_count,
+                    COUNT(CASE WHEN a.article_metadata->>'training_category' IS NULL OR a.article_metadata->>'training_category' = '' OR a.article_metadata->>'training_category' NOT IN ('chosen', 'rejected') THEN 1 END) as unclassified_count
+                FROM articles a
+                JOIN sources s ON a.source_id = s.id
+                WHERE a.published_at >= CURRENT_DATE - INTERVAL '7 days'
+                GROUP BY s.id, s.name
+                ORDER BY articles_count DESC
+                LIMIT 10
+            """))
+            source_data = source_query.fetchall()
+            
+            # Get total statistics
+            total_query = await session.execute(text("""
+                SELECT 
+                    COUNT(*) as total_articles,
+                    COUNT(DISTINCT source_id) as total_sources,
+                    MIN(published_at) as earliest_article,
+                    MAX(published_at) as latest_article
+                FROM articles
+            """))
+            total_stats = total_query.fetchone()
+            
+            return {
+                "status": "healthy",
+                "timestamp": datetime.now().isoformat(),
+                "ingestion": {
+                    "daily_trends": [
+                        {
+                            "date": str(row[0]),
+                            "articles_count": int(row[1]),
+                            "sources_count": int(row[2])
+                        }
+                        for row in daily_data
+                    ],
+                    "hourly_distribution": [
+                        {
+                            "hour": int(row[0]),
+                            "articles_count": int(row[1])
+                        }
+                        for row in hourly_data
+                    ],
+                    "source_breakdown": [
+                        {
+                            "source_name": str(row[0]),
+                            "articles_count": int(row[1]),
+                            "avg_hunt_score": float(row[2]) if row[2] else 0.0,
+                            "chosen_count": int(row[3]),
+                            "rejected_count": int(row[4]),
+                            "unclassified_count": int(row[5]),
+                            "chosen_ratio": f"{(int(row[3]) / int(row[1]) * 100):.1f}%" if int(row[1]) > 0 else "0%",
+                            "rejected_ratio": f"{(int(row[4]) / int(row[1]) * 100):.1f}%" if int(row[1]) > 0 else "0%",
+                            "unclassified_ratio": f"{(int(row[5]) / int(row[1]) * 100):.1f}%" if int(row[1]) > 0 else "0%"
+                        }
+                        for row in source_data
+                    ],
+                    "total_stats": {
+                        "total_articles": int(total_stats[0]),
+                        "total_sources": int(total_stats[1]),
+                        "earliest_article": str(total_stats[2]) if total_stats[2] else None,
+                        "latest_article": str(total_stats[3]) if total_stats[3] else None
+                    }
+                }
+            }
+    except Exception as e:
+        logger.error(f"Ingestion analytics failed: {e}")
+        return {
+            "status": "unhealthy",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e)
+        }
+
+@app.get("/health")
+async def health_checks_page(request: Request):
+    """Health checks page."""
+    return templates.TemplateResponse("health_checks.html", {"request": request})
 
 # Error handlers
 @app.exception_handler(404)

@@ -44,6 +44,15 @@ class HybridIOCExtractor:
         self.use_llm_validation = use_llm_validation
         self.iocextract = iocextract
         
+    def get_ollama_model(self, ai_model: str) -> str:
+        """Get the Ollama model name from the AI model setting."""
+        model_mapping = {
+            'mistral': 'mistral',
+            'llama3.1': 'llama3.1',
+            'codellama': 'codellama'
+        }
+        return model_mapping.get(ai_model, 'mistral')
+        
     def extract_raw_iocs(self, content: str) -> Dict[str, List[str]]:
         """
         Extract raw IOCs using iocextract.
@@ -109,7 +118,7 @@ class HybridIOCExtractor:
                 'process_cmdline': [], 'event_id': []
             }
     
-    async def validate_with_llm(self, raw_iocs: Dict[str, List[str]], content: str, api_key: str) -> Dict[str, List[str]]:
+    async def validate_with_llm(self, raw_iocs: Dict[str, List[str]], content: str, api_key: str, ai_model: str = 'chatgpt') -> Dict[str, List[str]]:
         """
         Validate and categorize IOCs using LLM.
         
@@ -159,40 +168,68 @@ Output format (return ONLY this JSON structure):
   "event_id": []
 }}"""
 
-            # Use ChatGPT API for validation
-            chatgpt_api_url = os.getenv('CHATGPT_API_URL', 'https://api.openai.com/v1/chat/completions')
-            
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    chatgpt_api_url,
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json"
-                    },
-                    json={
-                        "model": "gpt-4",
-                        "messages": [
-                            {
-                                "role": "system",
-                                "content": "You are a cybersecurity analyst specializing in IOC validation. Validate and categorize IOCs from threat intelligence articles and return them in valid JSON format only. NEVER include explanatory text, comments, or markdown formatting. Return ONLY the JSON object."
-                            },
-                            {
-                                "role": "user",
-                                "content": prompt
+            # Use the selected model
+            if ai_model == 'chatgpt':
+                # Use ChatGPT API for validation
+                chatgpt_api_url = os.getenv('CHATGPT_API_URL', 'https://api.openai.com/v1/chat/completions')
+                
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        chatgpt_api_url,
+                        headers={
+                            "Authorization": f"Bearer {api_key}",
+                            "Content-Type": "application/json"
+                        },
+                        json={
+                            "model": "gpt-4",
+                            "messages": [
+                                {
+                                    "role": "system",
+                                    "content": "You are a cybersecurity analyst specializing in IOC validation. Validate and categorize IOCs from threat intelligence articles and return them in valid JSON format only. NEVER include explanatory text, comments, or markdown formatting. Return ONLY the JSON object."
+                                },
+                                {
+                                    "role": "user",
+                                    "content": prompt
+                                }
+                            ],
+                            "max_tokens": 2048,
+                            "temperature": 0.1
+                        },
+                        timeout=60.0
+                    )
+                    
+                    if response.status_code != 200:
+                        logger.error(f"LLM validation failed: {response.status_code}")
+                        return raw_iocs  # Return raw IOCs if LLM fails
+                    
+                    result = response.json()
+                    validated_json = result['choices'][0]['message']['content']
+            else:
+                # Use Ollama API for validation
+                ollama_url = os.getenv('LLM_API_URL', 'http://cti_ollama:11434')
+                ollama_model = self.get_ollama_model(ai_model)
+                
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        f"{ollama_url}/api/generate",
+                        json={
+                            "model": ollama_model,
+                            "prompt": f"You are a cybersecurity analyst specializing in IOC validation. Validate and categorize IOCs from threat intelligence articles and return them in valid JSON format only. NEVER include explanatory text, comments, or markdown formatting. Return ONLY the JSON object.\n\n{prompt}",
+                            "stream": False,
+                            "options": {
+                                "temperature": 0.1,
+                                "num_predict": 2048
                             }
-                        ],
-                        "max_tokens": 2048,
-                        "temperature": 0.1
-                    },
-                    timeout=60.0
-                )
-                
-                if response.status_code != 200:
-                    logger.error(f"LLM validation failed: {response.status_code}")
-                    return raw_iocs  # Return raw IOCs if LLM fails
-                
-                result = response.json()
-                validated_json = result['choices'][0]['message']['content']
+                        },
+                        timeout=90.0
+                    )
+                    
+                    if response.status_code != 200:
+                        logger.error(f"Ollama validation failed: {response.status_code}")
+                        return raw_iocs  # Return raw IOCs if LLM fails
+                    
+                    result = response.json()
+                    validated_json = result.get('response', '')
                 
                 # Parse the validated JSON
                 try:
@@ -207,7 +244,7 @@ Output format (return ONLY this JSON structure):
             logger.error(f"Error in LLM validation: {e}")
             return raw_iocs  # Return raw IOCs if validation fails
     
-    async def extract_iocs(self, content: str, api_key: Optional[str] = None) -> IOCExtractionResult:
+    async def extract_iocs(self, content: str, api_key: Optional[str] = None, ai_model: str = 'chatgpt') -> IOCExtractionResult:
         """
         Extract IOCs using hybrid approach.
         
@@ -232,7 +269,7 @@ Output format (return ONLY this JSON structure):
         
         if self.use_llm_validation and raw_count > 0 and api_key:
             try:
-                validated_iocs = await self.validate_with_llm(raw_iocs, content, api_key)
+                validated_iocs = await self.validate_with_llm(raw_iocs, content, api_key, ai_model)
                 final_iocs = validated_iocs
                 extraction_method = 'hybrid'
                 confidence = 0.95  # Higher confidence with LLM validation
